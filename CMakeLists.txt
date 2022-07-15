@@ -18,7 +18,7 @@ find_package(Threads REQUIRED)
 
 
 add_library(
-  harmony-http STATIC
+  harmony_http STATIC
   src/server.h
   src/server.cc
   src/worker.h
@@ -38,14 +38,14 @@ add_library(
 )
 
 
-target_link_libraries(harmony-http PRIVATE  readerwriterqueue -static-libgcc -static-libstdc++
+target_link_libraries(harmony_http PRIVATE  readerwriterqueue -static-libgcc -static-libstdc++
   ev.a nghttp2.a OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
 
 
-target_sources(harmony-http PUBLIC FILE_SET HEADERS
+target_sources(harmony_http PUBLIC FILE_SET HEADERS
   BASE_DIRS src
   FILES src/server.h 
 )
 
-install(TARGETS harmony-http EXPORT harmony::http FILE_SET HEADERS)
+install(TARGETS harmony_http FILE_SET HEADERS)
 
