@@ -22,7 +22,7 @@
 
 #include <unordered_map>
 
-namespace util {
+namespace hm::util {
 
 template <class T> using unique_ptr = std::unique_ptr<T, void (*)(T *)>;
 
@@ -275,4 +275,4 @@ inline std::string http_date(time_t t) {
   return res;
 }
 
-} // namespace util
+} // namespace hm::util

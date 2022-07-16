@@ -15,19 +15,23 @@
 #include "util.h"
 #include <atomic>
 
+#include "worker.h"
+
+namespace hm {
+
 class HttpSession {
 
   using SSLSession = util::unique_ptr<SSL>;
 
-  friend class Worker;
   friend class Stream;
+  friend class Worker;
 
 public:
   HttpSession(Worker *worker, struct ev_loop *loop, int client_fd,
               SSLSession ssl);
   ~HttpSession();
 
-  static SSLSession create_ssl_session(struct ssl_ctx_st *ssl_ctx, int fd);
+  static SSLSession create_ssl_session(struct ::ssl_ctx_st *ssl_ctx, int fd);
   void remove_self();
 
   Stream *get_stream(int32_t id);
@@ -40,7 +44,9 @@ public:
 
   static void fill_callback(nghttp2_session_callbacks *callbacks);
 
-  Server *get_server();
+  Server *get_server() { return worker_->server_; }
+
+  std::string_view get_cached_date() { return worker_->get_cached_date(); }
 
 private:
   static void settings_timeout_cb(struct ev_loop *loop, ev_timer *t,
@@ -122,3 +128,4 @@ private:
 
   std::unordered_map<int32_t, Stream> streams_;
 };
+} // namespace hm

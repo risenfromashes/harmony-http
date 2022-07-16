@@ -16,6 +16,8 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
+namespace hm {
+
 HttpSession::HttpSession(Worker *worker, struct ev_loop *loop, int client_fd,
                          SSLSession ssl)
     : worker_(worker), loop_(loop), client_fd_(client_fd), ssl_(std::move(ssl)),
@@ -49,8 +51,6 @@ HttpSession::~HttpSession() {
   shutdown(client_fd_, SHUT_WR);
   close(client_fd_);
 }
-
-Server *HttpSession::get_server() { return worker_->server_; }
 
 void HttpSession::settings_timeout_cb(struct ev_loop *loop, ev_timer *t,
                                       int revents) {
@@ -164,8 +164,8 @@ void HttpSession::write_cb(struct ev_loop *loop, ev_io *w, int revents) {
 
 void HttpSession::remove_self() { worker_->remove_session(this); }
 
-HttpSession::SSLSession HttpSession::create_ssl_session(SSL_CTX *ssl_ctx,
-                                                        int fd) {
+HttpSession::SSLSession
+HttpSession::create_ssl_session(struct ::ssl_ctx_st *ssl_ctx, int fd) {
   auto ssl = SSLSession(SSL_new(ssl_ctx), SSL_free);
 
   if (!ssl) {
@@ -649,3 +649,4 @@ int HttpSession::on_stream_close_cb(nghttp2_session *session, int32_t stream_id,
   self->remove_stream(stream_id);
   return 0;
 }
+} // namespace hm

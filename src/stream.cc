@@ -11,6 +11,8 @@
 #include <string_view>
 #include <variant>
 
+namespace hm {
+
 Stream::Stream(HttpSession *session, int32_t stream_id)
     : headers{}, session_(session), body_length_(0), body_offset_(0),
       id_(stream_id) {
@@ -131,8 +133,9 @@ void Stream::Headers::add_header(nghttp2_rcbuf *name, nghttp2_rcbuf *value) {
 
 HttpSession *Stream::get_session() { return session_; }
 
-FileStream *Stream::get_static_file(const std::string_view &rel_path) {
-  return session_->get_server()->get_static_file(rel_path);
+FileStream *Stream::get_static_file(const std::string_view &rel_path,
+                                    bool prefer_compressed) {
+  return session_->worker_->get_static_file(rel_path, prefer_compressed);
 }
 
 Buffer<64 * 1024> *Stream::get_buffer() { return &session_->wbuf_; }
@@ -246,11 +249,14 @@ int Stream::prepare_response() {
     path = "/index.html";
   }
 
+  // TODO: Use Accept-Encoding to determine if compression is preferred
   // must add stream
-  auto fs = add_data_stream(get_static_file(path));
+  auto fs = get_static_file(path, true);
+  // std::cerr << "Request Path: " << path << std::endl;
   if (fs) {
-    auto [mtime, length] = fs->get_info();
-    auto date = util::http_date(ev_now(session_->loop_), mem_block_);
+    add_data_stream(fs);
+    auto [mtime, length] = fs->info();
+    auto date = session_->get_cached_date();
 
     if (last_mod_found && mtime <= last_mod) {
       response_headers.set_header_nc("date", date);
@@ -259,6 +265,9 @@ int Stream::prepare_response() {
       response_headers.set_header_nc("content-type", fs->mime_type());
       response_headers.set_header_nc("content-length",
                                      util::to_string(length, mem_block_));
+      if (fs->compressed()) {
+        response_headers.set_header_nc("content-encoding", fs->encoding());
+      }
       /* for development, files might change */
       response_headers.set_header_nc("cache-control", "max-age=0");
       response_headers.set_header_nc("date", date);
@@ -270,12 +279,13 @@ int Stream::prepare_response() {
   } else {
     // send basic string response
     auto ss = add_data_stream<StringStream>(
-        std::string_view{"<html>Hello HTTP/2 over TLS!</html>"});
+        std::string_view{"<html><h1>404</h1><p>Content not found.</p></html>"});
 
     response_headers.set_header_nc("content-type", "text/html; charset=utf-8");
     response_headers.set_header_nc("content-length",
                                    util::to_string(ss->length(), mem_block_));
 
-    return submit_response("200", ss);
+    return submit_response("404", ss);
   }
 }
+} // namespace hm

@@ -43,8 +43,8 @@ target_link_libraries(harmony_http PRIVATE  readerwriterqueue -static-libgcc -st
 
 
 target_sources(harmony_http PUBLIC FILE_SET HEADERS
-  BASE_DIRS src
-  FILES src/server.h 
+  BASE_DIRS include
+  FILES include/harmony/http2.h 
 )
 
 install(TARGETS harmony_http FILE_SET HEADERS)

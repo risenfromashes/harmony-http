@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstdlib>
 
+namespace hm {
 class Stream;
 
 struct DataStream {
@@ -17,3 +18,4 @@ struct DataStream {
 protected:
   DataStream(decltype(send_data) send_data_cb) : send_data(send_data_cb) {}
 };
+} // namespace hm

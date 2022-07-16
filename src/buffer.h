@@ -31,7 +31,7 @@
 
 #include <algorithm>
 #include <array>
-
+namespace hm {
 // a thin wrapper around std::array based buffer
 template <size_t N> struct Buffer {
 
@@ -120,3 +120,4 @@ private:
   std::array<uint8_t, N> buf_;
   uint8_t *pos_, *last_;
 };
+} // namespace hm

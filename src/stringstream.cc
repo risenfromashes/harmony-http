@@ -4,6 +4,8 @@
 
 #include <iostream>
 
+namespace hm {
+
 StringStream::StringStream(std::string &&str) : DataStream(on_send) {
   data_ = std::move(str);
   beg_ = last_ = data_.data();
@@ -26,3 +28,4 @@ int StringStream::on_send(DataStream *ds, Stream *stream, size_t length) {
 }
 
 size_t StringStream::length() { return end_ - beg_; }
+} // namespace hm

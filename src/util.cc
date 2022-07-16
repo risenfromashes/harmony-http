@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <fcntl.h>
+#include <map>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <sys/socket.h>
@@ -10,7 +11,7 @@
 
 #include <iostream>
 
-namespace util {
+namespace hm::util {
 
 ScopeDebug::ScopeDebug(const char *m) : message_(m) {
   std::cerr << "[ScopeDebug] "
@@ -447,7 +448,6 @@ bool check_http2_cipher_block_list(SSL *ssl) {
 
 std::unordered_map<std::string, std::string>
 read_mime_types(const char *filename) {
-
   std::unordered_map<std::string, std::string> rt;
   std::ifstream in(filename);
   if (in) {
@@ -476,6 +476,8 @@ read_mime_types(const char *filename) {
       }
     }
   }
+  // instead of whatever microsoft /etc/mime_types has
+  rt["ico"] = "image/x-icon";
   return rt;
 }
 
@@ -527,4 +529,4 @@ char *http_date(time_t t, char *res) {
   return res;
 }
 
-} // namespace util
+} // namespace hm::util

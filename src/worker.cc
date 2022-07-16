@@ -3,10 +3,15 @@
 #include "server.h"
 #include "util.h"
 
+#include <iomanip>
 #include <iostream>
 
+#include <dirent.h>
 #include <nghttp2/nghttp2.h>
 #include <openssl/ssl.h>
+#include <unistd.h>
+
+namespace hm {
 
 Worker::Worker(Server *server) : server_(server), queued_fds_(100) {
   // initialise new event loop
@@ -40,6 +45,7 @@ Worker::~Worker() {
   sessions_.clear();
   nghttp2_session_callbacks_del(callbacks_);
   nghttp2_option_del(options_);
+  files_.clear();
   ev_loop_destroy(loop_);
 }
 
@@ -72,7 +78,9 @@ void Worker::periodic_cb(struct ev_loop *loop, ev_periodic *watcher,
   //           << std::endl;
 }
 
-SSL_CTX *Worker::get_ssl_context() { return server_->ssl_ctx_.get(); }
+struct ssl_ctx_st *Worker::get_ssl_context() {
+  return server_->ssl_ctx_.get();
+}
 
 void Worker::run() {
   th_ = std::make_unique<std::thread>(
@@ -95,3 +103,75 @@ void Worker::accept_connection(int fd) {
 void Worker::remove_session(HttpSession *session) {
   sessions_.erase(session->itr_);
 }
+
+void Worker::remove_static_file(FileStream *file) {
+  files_.erase(file->relpath());
+}
+
+FileStream *Worker::add_static_file(std::string path) {
+  if (access(path.c_str(), R_OK) != 0) {
+    return nullptr;
+  }
+  auto fs = FileStream::create(std::move(path), this);
+  if (fs) {
+    auto *ptr = fs.get();
+    // use relative path as key, including opening /
+    auto relpath = fs->relpath();
+    // std::cout << "Serving static file: " << std::left << std::setw(40)
+    //           << relpath << " [" << std::left << std::setw(40) << fs->path()
+    //           << "]" << std::endl;
+    files_.emplace(relpath, std::move(fs));
+
+    return ptr;
+  }
+  return nullptr;
+}
+
+FileStream *Worker::get_static_file(const std::string_view &path,
+                                    bool prefer_compressed) {
+  auto [beg, end] = files_.equal_range(path);
+  FileStream *ret = nullptr;
+  for (auto itr = beg; itr != end; ++itr) {
+    ret = itr->second.get();
+    if (prefer_compressed && ret->compressed()) {
+      return ret;
+    }
+    if (!prefer_compressed && !ret->compressed()) {
+      return ret;
+    }
+  }
+  if (!ret) {
+    // file doesn't exist yet
+    // try to add it
+    ret = add_static_file(server_->static_root_ + std::string(path));
+    // also check if there is compressed files available
+
+    if (prefer_compressed) {
+      auto br =
+          add_static_file(server_->static_root_ + std::string(path) + ".br");
+      if (br) {
+        return br;
+      }
+    }
+  }
+  return ret;
+}
+
+std::string_view Worker::get_static_root() { return server_->static_root_; }
+
+std::string_view Worker::get_cached_date() {
+  auto now = ev_now(loop_);
+  if (now >= date_cache_.cache_time) {
+    // update
+    util::http_date(now, date_cache_.mem);
+  }
+  return date_cache_.date;
+}
+
+Server *Worker::get_server() { return server_; }
+
+struct ev_loop *Worker::get_loop() {
+  return loop_;
+}
+
+} // namespace hm

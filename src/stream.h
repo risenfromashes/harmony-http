@@ -16,6 +16,8 @@
 #include "stringstream.h"
 #include "util.h"
 
+namespace hm {
+
 class HttpSession;
 
 class Stream {
@@ -65,7 +67,8 @@ public:
     return ds;
   }
 
-  FileStream *get_static_file(const std::string_view &rel_path);
+  FileStream *get_static_file(const std::string_view &rel_path,
+                              bool prefer_compressed = true);
 
   /* int submit_data_response(...) */
   /* int submit_push_promise(...) */
@@ -174,3 +177,4 @@ private:
   std::variant<std::monostate, StringStream, FileStream> data_stream_store_;
   DataStream *data_stream_ = nullptr;
 };
+} // namespace hm

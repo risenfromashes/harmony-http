@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <memory>
 
+namespace hm {
+
 class StringStream : public DataStream {
 
 public:
@@ -19,3 +21,4 @@ private:
   std::string data_;
   const char *beg_, *last_, *end_;
 };
+} // namespace hm

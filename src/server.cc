@@ -27,17 +27,19 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
-Server::Server(int num_workers)
-    : num_workers_(num_workers), ssl_ctx_(nullptr, nullptr) {
+namespace hm {
+Server::Server(const Config &config)
+    : config_(config), ssl_ctx_(nullptr, nullptr) {
   loop_ = ev_default_loop(0);
+  for (int i = 0; i < config_.num_threads; i++) {
+    auto worker = std::make_unique<Worker>(this);
+    workers_.push_back(std::move(worker));
+  }
 }
 
-Server::~Server() {
-  workers_.clear();
-  static_files_.clear();
-}
+Server::~Server() { workers_.clear(); }
 
-std::pair<int, std::optional<int>> Server::start_listen(const char *port) {
+std::pair<int, std::optional<int>> Server::start_listen() {
   bool ok = false;
   addrinfo hints{};
   // both ipv4 and ipv6
@@ -48,7 +50,7 @@ std::pair<int, std::optional<int>> Server::start_listen(const char *port) {
 
   addrinfo *res, *rp;
   // let address default to localhost and set port
-  if (int r = getaddrinfo(nullptr, port, &hints, &res); r != 0) {
+  if (int r = getaddrinfo(nullptr, config_.port, &hints, &res); r != 0) {
     std::cerr << "getaddrinfo() failed: " << gai_strerror(r) << std::endl;
     freeaddrinfo(res);
     return {-1, std::nullopt};
@@ -99,7 +101,7 @@ void Server::acceptcb(struct ev_loop *loop, struct ev_io *w, int revents) {
       break;
     }
     self->workers_[self->next_worker_]->add_connection(fd);
-    self->next_worker_ = (self->next_worker_ + 1) % self->num_workers_;
+    self->next_worker_ = (self->next_worker_ + 1) % self->config_.num_threads;
   }
 }
 
@@ -139,7 +141,7 @@ Server::SSLContext Server::create_ssl_ctx() {
   }
 
   // set dh params
-  auto bio = util::unique_ptr<BIO>(BIO_new_file("../certs/dhparam.pem", "rb"),
+  auto bio = util::unique_ptr<BIO>(BIO_new_file(config_.dhparam_file, "rb"),
                                    [](BIO *bio) { BIO_free(bio); });
 
   if (bio == nullptr) {
@@ -168,7 +170,7 @@ Server::SSLContext Server::create_ssl_ctx() {
   }
 
   // set private key file
-  if (SSL_CTX_use_PrivateKey_file(ssl_ctx.get(), "../certs/key.pem",
+  if (SSL_CTX_use_PrivateKey_file(ssl_ctx.get(), config_.key_file,
                                   SSL_FILETYPE_PEM) != 1) {
     std::cerr << "SSL_CTX_use_PrivateKey_file failed: "
               << ERR_error_string(ERR_get_error(), nullptr) << std::endl;
@@ -176,7 +178,7 @@ Server::SSLContext Server::create_ssl_ctx() {
   }
 
   // set certificate file
-  if (SSL_CTX_use_certificate_chain_file(ssl_ctx.get(), "../certs/cert.pem") !=
+  if (SSL_CTX_use_certificate_chain_file(ssl_ctx.get(), config_.cert_file) !=
       1) {
     std::cerr << "SSL_CTX_use_certificate_chain_file failed: "
               << ERR_error_string(ERR_get_error(), nullptr) << std::endl;
@@ -241,7 +243,7 @@ static void configure_signals() {
   sigaction(SIGPIPE, &sa, NULL);
 }
 
-void Server::listen(const char *port, double timeout) {
+void Server::listen(double timeout) {
   ssl_ctx_ = create_ssl_ctx();
 
   if (!ssl_ctx_) {
@@ -249,7 +251,7 @@ void Server::listen(const char *port, double timeout) {
     return;
   }
 
-  auto [err, fd] = start_listen(port);
+  auto [err, fd] = start_listen();
   if (err) {
     std::cerr << "Error: failed to create server" << std::endl;
     return;
@@ -257,10 +259,8 @@ void Server::listen(const char *port, double timeout) {
 
   listener_fd_ = fd.value();
 
-  for (int i = 0; i < num_workers_; i++) {
-    auto worker = std::make_unique<Worker>(this);
-    worker->run();
-    workers_.push_back(std::move(worker));
+  for (int i = 0; i < config_.num_threads; i++) {
+    workers_[i]->run();
   }
 
   bool enable_timeout = timeout > 0.0;
@@ -289,6 +289,7 @@ void Server::serve_static_files(std::string path) {
   }
 
   static_root_ = std::move(path);
+
   iterate_directory(static_root_);
 }
 
@@ -309,15 +310,9 @@ void Server::iterate_directory(std::string path) {
     if (de->d_type & DT_DIR) {
       iterate_directory(path + de->d_name + "/");
     } else if (de->d_type & DT_REG | de->d_type & DT_LNK) {
-
-      auto fs = FileStream::create(path + de->d_name, loop_);
-      if (fs) {
-        // use relative path as key, including opening /
-        auto relpath = fs->path().substr(static_root_.size() - 1);
-        std::cout << "Serving static file: " << std::left << std::setw(40)
-                  << relpath << " [" << std::left << std::setw(40) << fs->path()
-                  << "]" << std::endl;
-        static_files_.try_emplace(relpath, std::move(fs));
+      // add to all thread workers
+      for (int i = 0; i < config_.num_threads; i++) {
+        workers_[i]->add_static_file(path + de->d_name);
       }
     }
   }
@@ -325,10 +320,4 @@ void Server::iterate_directory(std::string path) {
   closedir(dir);
 }
 
-FileStream *Server::get_static_file(std::string_view path) {
-  auto itr = static_files_.find(path);
-  if (itr != static_files_.end()) {
-    return itr->second.get();
-  }
-  return nullptr;
-}
+} // namespace hm
