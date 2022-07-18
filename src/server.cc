@@ -244,6 +244,8 @@ static void configure_signals() {
 }
 
 void Server::listen(double timeout) {
+  configure_signals();
+
   ssl_ctx_ = create_ssl_ctx();
 
   if (!ssl_ctx_) {
