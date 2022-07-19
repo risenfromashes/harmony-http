@@ -18,10 +18,9 @@
 
 namespace hm {
 
-HttpSession::HttpSession(Worker *worker, struct ev_loop *loop, int client_fd,
-                         SSLSession ssl)
-    : worker_(worker), loop_(loop), client_fd_(client_fd), ssl_(std::move(ssl)),
-      session_(nullptr) {
+HttpSession::HttpSession(Worker *worker, int client_fd, SSLSession ssl)
+    : worker_(worker), loop_(worker_->loop_), client_fd_(client_fd),
+      ssl_(std::move(ssl)), session_(nullptr) {
 
   ev_timer_init(&settings_timerev_, settings_timeout_cb, 10.0, 0.);
   settings_timerev_.data = this;
@@ -506,6 +505,8 @@ int HttpSession::on_frame_recv_cb(nghttp2_session *session,
       if (method == "POST" || method == "PUT") {
         // TODO: Handle POST/PUT: ON_DATA_START
       }
+
+      stream->prepare_response();
     }
 
     if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
@@ -515,7 +516,6 @@ int HttpSession::on_frame_recv_cb(nghttp2_session *session,
     }
 
     // Respond after headers
-    stream->prepare_response();
     break;
   }
   case NGHTTP2_SETTINGS: {
@@ -523,7 +523,7 @@ int HttpSession::on_frame_recv_cb(nghttp2_session *session,
       self->remove_settings_timer();
     }
   }
-  defualt:
+  default:
     break;
   }
 

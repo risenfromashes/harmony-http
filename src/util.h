@@ -6,6 +6,7 @@
 #include <fstream>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <postgresql/libpq-fe.h>
 #include <sys/socket.h>
 
 #include <nghttp2/nghttp2.h>
@@ -274,5 +275,7 @@ inline std::string http_date(time_t t) {
   http_date(t, &res[0]);
   return res;
 }
+
+std::string to_json(PGresult *result);
 
 } // namespace hm::util

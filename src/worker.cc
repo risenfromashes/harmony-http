@@ -13,7 +13,8 @@
 
 namespace hm {
 
-Worker::Worker(Server *server) : server_(server), queued_fds_(100) {
+Worker::Worker(Server *server)
+    : server_(server), queued_fds_(100), dbsession_(nullptr) {
   // initialise new event loop
   loop_ = ev_loop_new(ev_recommended_backends());
   // initialise watcher to send new socket events from main thread
@@ -37,9 +38,11 @@ Worker::Worker(Server *server) : server_(server), queued_fds_(100) {
 }
 
 Worker::~Worker() {
-  ev_async_send(loop_, &cancel_watcher_);
-  if (th_->joinable()) {
-    th_->join();
+  if (started_) {
+    ev_async_send(loop_, &cancel_watcher_);
+    if (th_->joinable()) {
+      th_->join();
+    }
   }
   // need to destroy sessions first which use loop_
   sessions_.clear();
@@ -47,6 +50,12 @@ Worker::~Worker() {
   nghttp2_option_del(options_);
   files_.clear();
   ev_loop_destroy(loop_);
+}
+
+void Worker::cancel() {
+  if (started_) {
+    ev_break(loop_, EVBREAK_ALL);
+  }
 }
 
 // callback called from main thread when new socket is accepted
@@ -83,6 +92,7 @@ struct ssl_ctx_st *Worker::get_ssl_context() {
 }
 
 void Worker::run() {
+  started_ = true;
   th_ = std::make_unique<std::thread>(
       [](struct ev_loop *loop) { ev_run(loop, 0); }, loop_);
 }
@@ -91,7 +101,7 @@ void Worker::accept_connection(int fd) {
   util::make_socket_nodelay(fd);
   auto ssl = HttpSession::create_ssl_session(get_ssl_context(), fd);
   if (ssl) {
-    auto &session = sessions_.emplace_front(this, loop_, fd, std::move(ssl));
+    auto &session = sessions_.emplace_front(this, fd, std::move(ssl));
     session.itr_ = sessions_.begin();
   } else {
     std::cerr << "Failed to create ssl session. Rejecting connection."
@@ -172,6 +182,30 @@ Server *Worker::get_server() { return server_; }
 
 struct ev_loop *Worker::get_loop() {
   return loop_;
+}
+
+void Worker::start_db_session(const char *connect_string) {
+  dbconnection_string_ = connect_string;
+  dbsession_ = db::Session::create(this, connect_string);
+  if (!dbsession_) {
+    std::cerr << "Failed to start db session. Worker exiting." << std::endl;
+    cancel();
+  }
+}
+
+void Worker::restart_db_session() { start_db_session(dbconnection_string_); }
+
+bool Worker::is_stream_alive(uint64_t serial) {
+  return alive_streams_.contains(serial);
+}
+
+void Worker::add_stream(Stream *stream) {
+  stream->serial_ = next_stream_serial_++;
+  alive_streams_.insert(stream->serial_);
+}
+
+void Worker::remove_stream(Stream *stream) {
+  alive_streams_.erase(stream->serial_);
 }
 
 } // namespace hm

@@ -27,8 +27,7 @@ class HttpSession {
   friend class Worker;
 
 public:
-  HttpSession(Worker *worker, struct ev_loop *loop, int client_fd,
-              SSLSession ssl);
+  HttpSession(Worker *worker, int client_fd, SSLSession ssl);
   ~HttpSession();
 
   static SSLSession create_ssl_session(struct ::ssl_ctx_st *ssl_ctx, int fd);
@@ -58,21 +57,20 @@ private:
                               uint8_t *buf, size_t length, uint32_t *data_flags,
                               nghttp2_data_source *source, void *user_data);
 
-  int ssl_write(const uint8_t *data, size_t datalen);
-  int ssl_read(uint8_t *data, size_t datalen);
+  inline int ssl_write(const uint8_t *data, size_t datalen);
+  inline int ssl_read(uint8_t *data, size_t datalen);
 
-  int verify_npn();
-  int connection_made();
+  inline int verify_npn();
+  inline int connection_made();
 
   int tls_handshake();
   int read();
   int write();
 
+  inline int fill_wb();
+
   inline int on_write() { return (this->*(this->write_func_))(); }
-
   inline int on_read() { return (this->*(this->read_func_))(); }
-
-  int fill_wb();
 
   static int on_header_cb(nghttp2_session *session, const nghttp2_frame *frame,
                           nghttp2_rcbuf *name, nghttp2_rcbuf *value,

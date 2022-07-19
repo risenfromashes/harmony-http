@@ -1,3 +1,6 @@
 [submodule "third_party/readerwriterqueue"]
 	path = third_party/readerwriterqueue
 	url = https://github.com/cameron314/readerwriterqueue
+[submodule "third_party/json"]
+	path = third_party/json
+	url = https://github.com/nlohmann/json

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <deque>
 #include <limits>
 #include <list>
@@ -11,9 +12,9 @@
 #include <ev.h>
 #include <nghttp2/nghttp2.h>
 
-#include "server.h"
-
+#include "dbsession.h"
 #include "filestream.h"
+#include "server.h"
 
 #include <readerwriterqueue.h>
 
@@ -24,12 +25,15 @@ class HttpSession;
 class Worker {
   friend class Server;
   friend class HttpSession;
+  friend class Stream;
 
 public:
   Worker(Server *server);
   ~Worker();
 
   void run();
+
+  void cancel();
 
   void add_connection(int fd);
 
@@ -49,7 +53,16 @@ public:
   Server *get_server();
   struct ev_loop *get_loop();
 
+  void start_db_session(const char *connect_string);
+  void restart_db_session();
+  db::Session *get_db_session() { return dbsession_.get(); }
+
+  bool is_stream_alive(uint64_t serial);
+
 private:
+  void add_stream(Stream *stream);
+  void remove_stream(Stream *stream);
+
   FileStream *add_static_file(std::string path);
 
   static void async_acceptcb(struct ev_loop *loop, ev_async *watcher,
@@ -69,7 +82,11 @@ private:
   std::unique_ptr<std::thread> th_;
   std::mutex mutex_;
   moodycamel::ReaderWriterQueue<int> queued_fds_;
+
   std::list<HttpSession> sessions_;
+
+  const char *dbconnection_string_;
+  std::unique_ptr<db::Session> dbsession_;
 
   nghttp2_session_callbacks *callbacks_;
   nghttp2_option *options_;
@@ -85,5 +102,10 @@ private:
       cache_time = std::numeric_limits<time_t>::min();
     }
   } date_cache_;
+
+  uint64_t next_stream_serial_ = 0;
+  std::unordered_set<uint64_t> alive_streams_;
+
+  bool started_ = false;
 };
 } // namespace hm

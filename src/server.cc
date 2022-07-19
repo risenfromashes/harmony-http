@@ -295,6 +295,12 @@ void Server::serve_static_files(std::string path) {
   iterate_directory(static_root_);
 }
 
+void Server::connect_database(const char *connection_string) {
+  for (int i = 0; i < config_.num_threads; i++) {
+    workers_[i]->start_db_session(connection_string);
+  }
+}
+
 void Server::iterate_directory(std::string path) {
   DIR *dir;
   dirent *de;

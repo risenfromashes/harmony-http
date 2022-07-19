@@ -8,6 +8,7 @@
 
 #include <nghttp2/nghttp2.h>
 
+#include <postgresql/libpq-fe.h>
 #include <string_view>
 #include <variant>
 
@@ -16,14 +17,15 @@ namespace hm {
 Stream::Stream(HttpSession *session, int32_t stream_id)
     : headers{}, session_(session), body_length_(0), body_offset_(0),
       id_(stream_id) {
-
   ev_timer_init(&rtimer_, timeout_cb, 0., 30.);
   ev_timer_init(&wtimer_, timeout_cb, 0., 30.);
   rtimer_.data = this;
   wtimer_.data = this;
+  session_->worker_->add_stream(this);
 }
 
 Stream::~Stream() {
+  session_->worker_->remove_stream(this);
   ev_timer_stop(session_->loop_, &rtimer_);
   ev_timer_stop(session_->loop_, &wtimer_);
 }
@@ -133,6 +135,10 @@ void Stream::Headers::add_header(nghttp2_rcbuf *name, nghttp2_rcbuf *value) {
 
 HttpSession *Stream::get_session() { return session_; }
 
+db::Session *Stream::get_db_session() {
+  return session_->worker_->get_db_session();
+}
+
 FileStream *Stream::get_static_file(const std::string_view &rel_path,
                                     bool prefer_compressed) {
   return session_->worker_->get_static_file(rel_path, prefer_compressed);
@@ -181,79 +187,85 @@ void Stream::timeout_cb(struct ev_loop *loop, ev_timer *w, int revents) {
 }
 
 int Stream::submit_response(std::string_view status, DataStream *data_stream) {
+  int rv;
   response_headers.nva[0] = util::make_nv(":status", status);
-
   nghttp2_data_provider dp;
   if (data_stream) {
     dp.source.ptr = data_stream;
     dp.read_callback = HttpSession::data_read_cb;
-    return nghttp2_submit_response(session_->get_nghttp2_session(), id_,
-                                   response_headers.nva.data(),
-                                   response_headers.nvlen, &dp);
+    rv = nghttp2_submit_response(session_->get_nghttp2_session(), id_,
+                                 response_headers.nva.data(),
+                                 response_headers.nvlen, &dp);
   } else {
-    return nghttp2_submit_response(session_->get_nghttp2_session(), id_,
-                                   response_headers.nva.data(),
-                                   response_headers.nvlen, nullptr);
+    rv = nghttp2_submit_response(session_->get_nghttp2_session(), id_,
+                                 response_headers.nva.data(),
+                                 response_headers.nvlen, nullptr);
   }
+  session_->on_write();
+  return rv;
 }
 
 int Stream::submit_rst(uint32_t error_code) {
   stop_read_timeout();
   stop_write_timeout();
 
-  return nghttp2_submit_rst_stream(session_->get_nghttp2_session(),
-                                   NGHTTP2_FLAG_NONE, id_, error_code);
+  int rv = nghttp2_submit_rst_stream(session_->get_nghttp2_session(),
+                                     NGHTTP2_FLAG_NONE, id_, error_code);
+  session_->on_write();
+  return rv;
 }
 
 int Stream::submit_non_final_response(std::string_view status) {
   nghttp2_nv nva[] = {util::make_nv(":status", status)};
-  return nghttp2_submit_headers(session_->get_nghttp2_session(),
-                                NGHTTP2_FLAG_NONE, id_, nullptr, nva, 1,
-                                nullptr);
+  int rv =
+      nghttp2_submit_headers(session_->get_nghttp2_session(), NGHTTP2_FLAG_NONE,
+                             id_, nullptr, nva, 1, nullptr);
+  session_->on_write();
+  return rv;
 }
 
-int Stream::prepare_response() {
-  std::string_view reqpath = headers.path() ? headers.path().value() : "/";
-  if (reqpath.empty()) {
-    reqpath = "/";
-  }
+int Stream::submit_html_response(std::string_view status,
+                                 std::string_view response) {
 
-  time_t last_mod = 0;
-  bool last_mod_found = false;
-  if (headers.ims()) {
-    /* nghttp2 rcbuf is value is guaranteed to be null terminated */
-    last_mod = util::parse_http_date(headers.ims().value().data());
-    last_mod_found = true;
-  }
+  auto ss = add_data_stream<StringStream>(response);
 
-  auto query_pos = reqpath.find('?');
-  std::string_view raw_path, raw_query;
-  if (query_pos != reqpath.npos) {
-    raw_path = reqpath.substr(0, query_pos);
-    raw_query = reqpath.substr(query_pos);
-  } else {
-    raw_path = reqpath;
-  }
+  response_headers.set_header_nc("content-type", "text/html; charset=utf-8");
+  response_headers.set_header_nc("content-length",
+                                 util::to_string(ss->length(), mem_block_));
 
-  std::string_view path = (raw_path.find('%') == raw_path.npos)
-                              ? raw_path
-                              : util::percent_decode(raw_path, mem_block_);
-  std::string_view query = (raw_query.find('%') == raw_query.npos)
-                               ? raw_query
-                               : util::percent_decode(raw_query, mem_block_);
+  return submit_response(status, ss);
+}
 
-  // TODO: Implement push promise
-  // TODO: Implement file response
+int Stream::submit_json_response(std::string_view status,
+                                 std::string &&response) {
 
+  auto ss = add_data_stream<StringStream>(std::move(response));
+
+  response_headers.set_header_nc("content-type", "application/json");
+  response_headers.set_header_nc("content-length",
+                                 util::to_string(ss->length(), mem_block_));
+
+  return submit_response(status, ss);
+}
+
+int Stream::submit_file_response() {
+
+  auto path = path_;
   if (path == "/") {
     path = "/index.html";
   }
 
-  // TODO: Use Accept-Encoding to determine if compression is preferred
-  // must add stream
   auto fs = get_static_file(path, true);
-  // std::cerr << "Request Path: " << path << std::endl;
+
   if (fs) {
+    time_t last_mod = 0;
+    bool last_mod_found = false;
+    if (headers.ims()) {
+      /* nghttp2 rcbuf is value is guaranteed to be null terminated */
+      last_mod = util::parse_http_date(headers.ims().value().data());
+      last_mod_found = true;
+    }
+
     add_data_stream(fs);
     auto [mtime, length] = fs->info();
     auto date = session_->get_cached_date();
@@ -275,17 +287,60 @@ int Stream::prepare_response() {
                                      util::http_date(mtime, mem_block_));
       return submit_response("200", fs);
     }
+  } else {
+    return submit_html_response(
+        "404", "<html><h1>404</h1><p>Content not found.</p></html>");
+  }
+  return -1;
+}
+
+int Stream::prepare_response() {
+  std::string_view reqpath = headers.path() ? headers.path().value() : "/";
+  if (reqpath.empty()) {
+    reqpath = "/";
+  }
+
+  auto query_pos = reqpath.find('?');
+  std::string_view raw_path, raw_query;
+  if (query_pos != reqpath.npos) {
+    raw_path = reqpath.substr(0, query_pos);
+    raw_query = reqpath.substr(query_pos);
+  } else {
+    raw_path = reqpath;
+  }
+
+  path_ = (raw_path.find('%') == raw_path.npos)
+              ? raw_path
+              : util::percent_decode(raw_path, mem_block_);
+  query_ = (raw_query.find('%') == raw_query.npos)
+               ? raw_query
+               : util::percent_decode(raw_query, mem_block_);
+
+  // TODO: Implement push promise
+
+  // TODO: Use Accept-Encoding to determine if compression is preferred
+
+  if (path_ == "/users") {
+    auto db = get_db_session();
+    if (db) {
+      db->send_command(
+          this, "SELECT * FROM users;",
+          [this](PGresult *result) {
+            submit_json_response("200", util::to_json(result));
+          },
+          [this](PGresult *result) {
+            submit_html_response(
+                "500", "<html><h1>500</h1><p>Database Query failed</p></html>");
+          });
+      return 0;
+    } else {
+      return submit_html_response(
+          "500", "<html><h1>500</h1><p>Not connected to database.</p></html>");
+    }
 
   } else {
-    // send basic string response
-    auto ss = add_data_stream<StringStream>(
-        std::string_view{"<html><h1>404</h1><p>Content not found.</p></html>"});
-
-    response_headers.set_header_nc("content-type", "text/html; charset=utf-8");
-    response_headers.set_header_nc("content-length",
-                                   util::to_string(ss->length(), mem_block_));
-
-    return submit_response("404", ss);
+    return submit_file_response();
   }
+  return 0;
 }
 } // namespace hm

@@ -3,12 +3,14 @@
 #include <map>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <postgresql/libpq-fe.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "util.h"
 
+#include <cassert>
 #include <iostream>
 
 namespace hm::util {
@@ -527,6 +529,118 @@ char *http_date(time_t t, char *res) {
   p = std::copy_n(s, 4, p);
 
   return res;
+}
+
+enum PGTypeOid {
+  BOOL = 16,
+  CHAR = 18,
+  INT8 = 20,
+  INT2 = 21,
+  INT4 = 23,
+  TEXT = 25,
+  FLOAT4 = 700,
+  FLOAT8 = 701,
+  BPCHAR = 1042,
+  VARCHAR = 1043,
+  DATE = 1082,
+  TIME = 1083,
+  TIMESTAMP = 1114,
+  TIMESTAMPTZ = 1184,
+  NUMERIC = 1700
+};
+
+bool is_pg_string_type(Oid oid) {
+  switch (oid) {
+  case CHAR:
+  case TEXT:
+  case BPCHAR:
+  case VARCHAR:
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool is_pg_num_type(Oid oid) {
+  switch (oid) {
+  case INT2:
+  case INT4:
+  case INT8:
+  case FLOAT4:
+  case FLOAT8:
+  case NUMERIC:
+    return true;
+  default:
+    return false;
+  }
+}
+
+void jsonify_row(PGresult *res, int row, std::string &out) {
+  std::string &ret = out;
+  int i = row;
+  int n_cols = PQnfields(res);
+  ret += "{";
+  for (int j = 0; j < n_cols; j++) {
+    Oid type = PQftype(res, j);
+    char *field = PQfname(res, j);
+    char *val = PQgetvalue(res, i, j);
+    ret += "\"";
+    ret += field;
+    ret += "\"";
+    ret += ":";
+    if (val == nullptr) {
+      ret += "null";
+    } else if (type == BOOL) {
+      ret += val[0] == 't' ? "true" : "false";
+    } else if (is_pg_num_type(type)) {
+      // numbers can be appended as is
+      ret += val;
+    } else { // otherwise assume string type
+      // escape literal
+      ret += "\"";
+      ret += val;
+      ret += "\"";
+    }
+
+    if (j < n_cols - 1) {
+      ret += ',';
+    }
+  }
+  ret += "}";
+}
+
+std::string to_json(PGresult *res) {
+  switch (PQresultStatus(res)) {
+  case PGRES_TUPLES_OK: {
+    std::string ret;
+    int n_rows = PQntuples(res);
+    int n_cols = PQnfields(res);
+    // rough estimate
+    ret.reserve(n_rows * n_cols * 8);
+    ret += "[";
+    for (int i = 0; i < n_rows; i++) {
+      jsonify_row(res, i, ret);
+      if (i < n_rows - 1) {
+        ret += ',';
+      }
+    }
+    ret += "]";
+    return ret;
+  }
+  case PGRES_SINGLE_TUPLE: {
+    std::string ret;
+    int n_cols = PQnfields(res);
+    ret.reserve(n_cols * 8);
+    jsonify_row(res, 0, ret);
+    return ret;
+  }
+  case PGRES_COMMAND_OK:
+    return "{}";
+  default:
+    // std::cerr << PQresultStatus(res) << std::endl;
+    assert(false && "to_json shouldn't be called with given result type");
+    break;
+  }
 }
 
 } // namespace hm::util

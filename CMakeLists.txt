@@ -12,6 +12,10 @@ else()
 endif()
 
 add_subdirectory(third_party/readerwriterqueue)
+
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+add_subdirectory(third_party/json)
+
 # set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
@@ -24,6 +28,9 @@ add_library(
   src/server.cc
   src/worker.h
   src/worker.cc
+  src/dbsession.h
+  src/dbsession.cc
+  src/dbquery.h
   src/httpsession.h
   src/httpsession.cc
   src/stream.h
@@ -39,8 +46,16 @@ add_library(
 )
 
 
-target_link_libraries(harmony_http PRIVATE  readerwriterqueue -static-libgcc -static-libstdc++
-  ev nghttp2 OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
+target_link_libraries(harmony_http PRIVATE  
+  -static-libgcc -static-libstdc++
+  readerwriterqueue 
+  PostgreSQL::PostgreSQL 
+  nghttp2
+  ev 
+  OpenSSL::SSL
+  OpenSSL::Crypto
+  Threads::Threads
+)
 
 
 target_sources(harmony_http PUBLIC FILE_SET HEADERS

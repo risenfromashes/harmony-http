@@ -35,6 +35,8 @@ public:
 
   void serve_static_files(std::string path_to_dir);
 
+  void connect_database(const char *connection_string);
+
   void listen(double timeout = 0.0);
 
 private:

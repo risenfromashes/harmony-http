@@ -3,6 +3,7 @@
 #include <array>
 #include <atomic>
 #include <concepts>
+#include <cstdint>
 #include <optional>
 #include <string_view>
 #include <variant>
@@ -12,6 +13,7 @@
 
 #include "buffer.h"
 #include "datastream.h"
+#include "dbsession.h"
 #include "filestream.h"
 #include "stringstream.h"
 #include "util.h"
@@ -22,18 +24,22 @@ class HttpSession;
 
 class Stream {
 
+  friend class Worker;
   friend class HttpSession;
-
   friend class StringStream;
   friend class FileStream;
+  friend class HttpRequest;
 
 public:
   Stream(HttpSession *session, int32_t stream_id);
   ~Stream();
 
   int32_t id() { return id_; }
+  uint64_t serial() { return serial_; }
 
   HttpSession *get_session();
+  db::Session *get_db_session();
+
   Buffer<64 * 1024> *get_buffer();
   // resets read timeout
   void reset_read_timeout();
@@ -47,6 +53,8 @@ public:
   void stop_read_timeout();
   // stops timeout
   void stop_write_timeout();
+
+  static void timeout_cb(struct ev_loop *loop, ev_timer *w, int revents);
 
   /* own the DataStream */
   template <std::derived_from<DataStream> T>
@@ -75,11 +83,14 @@ public:
   int submit_response(std::string_view status, DataStream *stream);
   int submit_rst(uint32_t error_code);
   int submit_non_final_response(std::string_view status);
+
+  int submit_html_response(std::string_view status, std::string_view response);
+  int submit_json_response(std::string_view status, std::string &&response);
+  int submit_file_response();
+
   /* void prepare_status_response(...) */
   /* void prepare_redirect_response(...) */
   int prepare_response();
-
-  static void timeout_cb(struct ev_loop *loop, ev_timer *w, int revents);
 
   struct Headers {
 
@@ -162,7 +173,13 @@ public:
   } response_headers;
 
 private:
+  /* unique identifier of streams per thread */
+  uint64_t serial_;
+
   HttpSession *session_;
+
+  std::string_view path_;
+  std::string_view query_;
 
   ev_timer rtimer_;
   ev_timer wtimer_;
