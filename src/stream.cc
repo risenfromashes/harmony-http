@@ -139,6 +139,10 @@ db::Session *Stream::get_db_session() {
   return session_->worker_->get_db_session();
 }
 
+// UUIDGenerator *Stream::get_uuid_generator() {
+//   return session_->worker_->get_uuid_generator();
+// }
+
 FileStream *Stream::get_static_file(const std::string_view &rel_path,
                                     bool prefer_compressed) {
   return session_->worker_->get_static_file(rel_path, prefer_compressed);
@@ -192,7 +196,8 @@ int Stream::submit_response(std::string_view status, DataStream *data_stream) {
   nghttp2_data_provider dp;
   if (data_stream) {
     dp.source.ptr = data_stream;
-    dp.read_callback = HttpSession::data_read_cb;
+    dp.read_callback = &HttpSession::data_read_cb;
+    std::cout << dp.read_callback << std::endl;
     rv = nghttp2_submit_response(session_->get_nghttp2_session(), id_,
                                  response_headers.nva.data(),
                                  response_headers.nvlen, &dp);
@@ -222,6 +227,21 @@ int Stream::submit_non_final_response(std::string_view status) {
                              id_, nullptr, nva, 1, nullptr);
   session_->on_write();
   return rv;
+}
+
+int Stream::submit_string_response(
+    std::string_view status, std::initializer_list<string_view_pair> headers,
+    std::string &&response) {
+  auto ss = add_data_stream<StringStream>(std::move(response));
+
+  for (auto &[name, value] : headers) {
+    response_headers.set_header_nc(name.data(), value);
+  }
+
+  response_headers.set_header_nc("content-length",
+                                 util::to_string(ss->length(), mem_block_));
+
+  return submit_response(status, ss);
 }
 
 int Stream::submit_html_response(std::string_view status,
@@ -294,7 +314,7 @@ int Stream::submit_file_response() {
   return -1;
 }
 
-int Stream::prepare_response() {
+void Stream::parse_path() {
   std::string_view reqpath = headers.path() ? headers.path().value() : "/";
   if (reqpath.empty()) {
     reqpath = "/";
@@ -315,6 +335,9 @@ int Stream::prepare_response() {
   query_ = (raw_query.find('%') == raw_query.npos)
                ? raw_query
                : util::percent_decode(raw_query, mem_block_);
+}
+
+int Stream::prepare_response() {
 
   // TODO: Implement push promise
 
@@ -323,7 +346,7 @@ int Stream::prepare_response() {
   if (path_ == "/users") {
     auto db = get_db_session();
     if (db) {
-      db->send_command(
+      db->send_query(
           this, "SELECT * FROM users;",
           [this](PGresult *result) {
             submit_json_response("200", util::to_json(result));

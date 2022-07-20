@@ -44,6 +44,9 @@ public:
   static void fill_callback(nghttp2_session_callbacks *callbacks);
 
   Server *get_server() { return worker_->server_; }
+  simdjson::ondemand::parser &get_json_parser() {
+    return worker_->json_parser_;
+  }
 
   std::string_view get_cached_date() { return worker_->get_cached_date(); }
 

@@ -1,3 +1,4 @@
+#include <iterator>
 #include <postgresql/libpq-fe.h>
 
 #include "dbquery.h"
@@ -54,14 +55,15 @@ int Session::send_query(db::Query &query) {
   } else if (std::holds_alternative<Query::QueryParamArg>(query.arg)) {
     auto &arg = std::get<Query::QueryParamArg>(query.arg);
 
-    std::vector<const char *> values(arg.param_vector.size());
+    assert(arg.param_vector.size() <= 20 && "parameter size too large");
+    const char *values[20];
     for (size_t i = 0; i < arg.param_vector.size(); i++) {
       values[i] = arg.param_vector[i].c_str();
     }
 
     rv = PQsendQueryParams(conn_, arg.command, arg.param_vector.size(),
                            /*  implict types */ nullptr,
-                           /* value */ values.data(),
+                           /* value */ values,
                            /* length not required in text format */ nullptr,
                            /* all in text format */ nullptr,
                            /* result in text format */ 0);
@@ -73,13 +75,14 @@ int Session::send_query(db::Query &query) {
   } else if (std::holds_alternative<Query::QueryPreparedArg>(query.arg)) {
     auto &arg = std::get<Query::QueryPreparedArg>(query.arg);
 
-    std::vector<const char *> values(arg.param_vector.size());
+    assert(arg.param_vector.size() <= 20 && "parameter size too large");
+    const char *values[20];
     for (size_t i = 0; i < arg.param_vector.size(); i++) {
       values[i] = arg.param_vector[i].c_str();
     }
 
     rv = PQsendQueryPrepared(conn_, arg.statement, arg.param_vector.size(),
-                             /* values */ values.data(),
+                             /* values */ values,
                              /* lengths of text data implicit*/ nullptr,
                              /*all in text format */ nullptr, 0);
   }
@@ -311,14 +314,31 @@ int Session::write() {
   return 0;
 }
 
-void Session::send_command(Stream *stream, const char *command,
-                           std::function<void(PGresult *result)> &&on_sucess,
-                           std::function<void(PGresult *result)> &&on_error) {
+void Session::send_query(Stream *stream, const char *command,
+                         std::function<void(PGresult *result)> &&on_sucess,
+                         std::function<void(PGresult *result)> &&on_error) {
   queued_.emplace_back(db::Query{.stream_serial = stream->serial(),
                                  .is_sync_point = true,
                                  .arg = db::Query::QueryArg{.command = command},
                                  .result_cb = std::move(on_sucess),
                                  .error_cb = std::move(on_error)});
+  // sending query start writing
+  ev_io_start(loop_, &wev_);
+}
+
+void Session::send_query_params(
+    Stream *stream, const char *command,
+    std::initializer_list<std::string> params,
+    std::function<void(PGresult *result)> &&on_sucess,
+    std::function<void(PGresult *result)> &&on_error) {
+  auto &query = queued_.emplace_back(
+      db::Query{.stream_serial = stream->serial(),
+                .is_sync_point = true,
+                .arg = db::Query::QueryParamArg{.command = command},
+                .result_cb = std::move(on_sucess),
+                .error_cb = std::move(on_error)});
+  auto &param_vec = std::get<db::Query::QueryParamArg>(query.arg).param_vector;
+  std::move(params.begin(), params.end(), std::back_inserter(param_vec));
   // sending query start writing
   ev_io_start(loop_, &wev_);
 }

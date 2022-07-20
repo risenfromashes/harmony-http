@@ -15,8 +15,10 @@
 #include "dbsession.h"
 #include "filestream.h"
 #include "server.h"
+#include "uuidgenerator.h"
 
 #include <readerwriterqueue.h>
+#include <simdjson.h>
 
 namespace hm {
 
@@ -56,6 +58,7 @@ public:
   void start_db_session(const char *connect_string);
   void restart_db_session();
   db::Session *get_db_session() { return dbsession_.get(); }
+  UUIDGenerator *get_uuid_generator() { return &uuid_generator_; }
 
   bool is_stream_alive(uint64_t serial);
 
@@ -107,5 +110,8 @@ private:
   std::unordered_set<uint64_t> alive_streams_;
 
   bool started_ = false;
+
+  simdjson::ondemand::parser json_parser_;
+  UUIDGenerator uuid_generator_;
 };
 } // namespace hm

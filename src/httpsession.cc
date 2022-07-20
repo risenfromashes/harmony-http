@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstdint>
+#include <libpq-fe.h>
 #include <nghttp2/nghttp2.h>
 #include <sys/socket.h>
 
@@ -10,11 +11,15 @@
 #include "datastream.h"
 #include "httpsession.h"
 #include "server.h"
+#include "simdjson/common_defs.h"
 #include "util.h"
+#include "uuidgenerator.h"
 #include "worker.h"
 
 #include <openssl/err.h>
 #include <openssl/ssl.h>
+
+#include <simdjson.h>
 
 namespace hm {
 
@@ -481,6 +486,36 @@ int HttpSession::on_frame_recv_cb(nghttp2_session *session,
 
     // TODO: Handle POST/PUT: ON_DATA
 
+    // received full data
+    auto &parser = self->get_json_parser();
+    auto &body = stream->request_.body_;
+    body.reserve(body.size() + simdjson::SIMDJSON_PADDING);
+    auto doc = parser.iterate(body);
+    std::string_view user = doc["name"];
+    std::string_view password = doc["password"];
+
+    // stream->get_db_session()->send_query_params(
+    //     stream,
+    //     "SELECT name,password FROM users WHERE name = $1::VARCHAR(20) AND "
+    //     "password = $2::VARCHAR(20);",
+    //     {std::string(user), std::string(password)},
+    //     [stream](PGresult *result) {
+    //       if (PQresultStatus(result) == PGRES_TUPLES_OK) {
+    //         if (PQntuples(result) == 0) {
+    //           stream->submit_html_response("401", "Unauthorized");
+    //         } else {
+    //           std::string uuid =
+    //               uuids::to_string(stream->get_uuid_generator()->generate());
+    //           stream->submit_string_response("200", {}, std::move(uuid));
+    //         }
+    //       } else {
+    //         stream->submit_html_response("401", "Unauthorized");
+    //       }
+    //     },
+    //     [stream](PGresult *) {
+    //       stream->submit_html_response("401", "Unauthorized");
+    //     });
+
     if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
       stream->stop_read_timeout();
       // TODO: Handle POST/PUT: ON_DATA_END
@@ -501,12 +536,17 @@ int HttpSession::on_frame_recv_cb(nghttp2_session *session,
         stream->submit_non_final_response("100");
       }
 
+      // Actual HTTP request headers received
+
+      stream->parse_path();
       auto method = stream->headers.method();
+
       if (method == "POST" || method == "PUT") {
         // TODO: Handle POST/PUT: ON_DATA_START
-      }
 
-      stream->prepare_response();
+      } else if (method == "GET") {
+        stream->prepare_response();
+      }
     }
 
     if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
@@ -639,6 +679,11 @@ int HttpSession::on_data_chunk_recv_cb(nghttp2_session *session, uint8_t flags,
   }
 
   // TODO: Handle post
+
+  // add response to request body for now
+  stream->request_.body_ +=
+      std::string_view(reinterpret_cast<const char *>(data), len);
+
   stream->reset_read_timeout();
   return 0;
 }

@@ -11,6 +11,8 @@ class Stream;
 
 // wrapper around Stream
 class HttpRequest {
+  friend class Stream;
+  friend class HttpSession;
 
   std::optional<std::string_view> get_header(std::string_view header_name);
   std::string_view path();

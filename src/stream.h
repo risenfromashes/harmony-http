@@ -15,12 +15,15 @@
 #include "datastream.h"
 #include "dbsession.h"
 #include "filestream.h"
+#include "httprequest.h"
+#include "httpresponse.h"
 #include "stringstream.h"
 #include "util.h"
 
 namespace hm {
 
 class HttpSession;
+class UUIDGenerator;
 
 class Stream {
 
@@ -31,6 +34,8 @@ class Stream {
   friend class HttpRequest;
 
 public:
+  using string_view_pair = std::pair<std::string_view, std::string_view>;
+
   Stream(HttpSession *session, int32_t stream_id);
   ~Stream();
 
@@ -39,6 +44,7 @@ public:
 
   HttpSession *get_session();
   db::Session *get_db_session();
+  UUIDGenerator *get_uuid_generator();
 
   Buffer<64 * 1024> *get_buffer();
   // resets read timeout
@@ -78,12 +84,20 @@ public:
   FileStream *get_static_file(const std::string_view &rel_path,
                               bool prefer_compressed = true);
 
+  void parse_path();
+
   /* int submit_data_response(...) */
   /* int submit_push_promise(...) */
-  int submit_response(std::string_view status, DataStream *stream);
   int submit_rst(uint32_t error_code);
   int submit_non_final_response(std::string_view status);
 
+  int submit_response(std::string_view status, DataStream *stream);
+  // int submit_string_response(std::string_view status,
+  //                            std::initializer_list<string_view_pair> headers,
+  //                            std::string_view response);
+  int submit_string_response(std::string_view status,
+                             std::initializer_list<string_view_pair> headers,
+                             std::string &&response);
   int submit_html_response(std::string_view status, std::string_view response);
   int submit_json_response(std::string_view status, std::string &&response);
   int submit_file_response();
@@ -177,6 +191,9 @@ private:
   uint64_t serial_;
 
   HttpSession *session_;
+
+  HttpRequest request_;
+  HttpResponse response_;
 
   std::string_view path_;
   std::string_view query_;

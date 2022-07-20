@@ -6,15 +6,14 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-  set(CMAKE_CXX_FLAGS "-fno-exceptions -fsanitize=address")
-else()
-  set(CMAKE_CXX_FLAGS "-fno-exceptions")
+  set(CMAKE_CXX_FLAGS "-fsanitize=address")
 endif()
 
 add_subdirectory(third_party/readerwriterqueue)
-
-set(JSON_BuildTests OFF CACHE INTERNAL "")
-add_subdirectory(third_party/json)
+add_subdirectory(third_party/simdjson EXCLUDE_FROM_ALL)
+add_subdirectory(third_party/stduuid)
+SET(ENABLE_STATIC_LIB TRUE)
+add_subdirectory(third_party/nghttp2)
 
 # set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL REQUIRED)
@@ -49,8 +48,10 @@ add_library(
 target_link_libraries(harmony_http PRIVATE  
   -static-libgcc -static-libstdc++
   readerwriterqueue 
+  simdjson
+  stduuid
   PostgreSQL::PostgreSQL 
-  nghttp2
+  nghttp2_static
   ev 
   OpenSSL::SSL
   OpenSSL::Crypto
