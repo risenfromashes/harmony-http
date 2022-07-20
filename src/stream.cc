@@ -1,3 +1,4 @@
+#include <ev.h>
 #include <iostream>
 
 #include "buffer.h"
@@ -139,9 +140,9 @@ db::Session *Stream::get_db_session() {
   return session_->worker_->get_db_session();
 }
 
-// UUIDGenerator *Stream::get_uuid_generator() {
-//   return session_->worker_->get_uuid_generator();
-// }
+UUIDGenerator *Stream::get_uuid_generator() {
+  return session_->worker_->get_uuid_generator();
+}
 
 FileStream *Stream::get_static_file(const std::string_view &rel_path,
                                     bool prefer_compressed) {
@@ -197,7 +198,6 @@ int Stream::submit_response(std::string_view status, DataStream *data_stream) {
   if (data_stream) {
     dp.source.ptr = data_stream;
     dp.read_callback = &HttpSession::data_read_cb;
-    std::cout << dp.read_callback << std::endl;
     rv = nghttp2_submit_response(session_->get_nghttp2_session(), id_,
                                  response_headers.nva.data(),
                                  response_headers.nvlen, &dp);
@@ -206,7 +206,7 @@ int Stream::submit_response(std::string_view status, DataStream *data_stream) {
                                  response_headers.nva.data(),
                                  response_headers.nvlen, nullptr);
   }
-  session_->on_write();
+  ev_io_start(session_->worker_->loop_, &session_->wev_);
   return rv;
 }
 
@@ -216,7 +216,7 @@ int Stream::submit_rst(uint32_t error_code) {
 
   int rv = nghttp2_submit_rst_stream(session_->get_nghttp2_session(),
                                      NGHTTP2_FLAG_NONE, id_, error_code);
-  session_->on_write();
+  ev_io_start(session_->worker_->loop_, &session_->wev_);
   return rv;
 }
 
@@ -225,7 +225,7 @@ int Stream::submit_non_final_response(std::string_view status) {
   int rv =
       nghttp2_submit_headers(session_->get_nghttp2_session(), NGHTTP2_FLAG_NONE,
                              id_, nullptr, nva, 1, nullptr);
-  session_->on_write();
+  ev_io_start(session_->worker_->loop_, &session_->wev_);
   return rv;
 }
 
@@ -344,23 +344,48 @@ int Stream::prepare_response() {
   // TODO: Use Accept-Encoding to determine if compression is preferred
 
   if (path_ == "/users") {
-    auto db = get_db_session();
-    if (db) {
-      db->send_query(
-          this, "SELECT * FROM users;",
-          [this](PGresult *result) {
-            submit_json_response("200", util::to_json(result));
-          },
-          [this](PGresult *result) {
-            submit_html_response(
-                "500", "<html><h1>500</h1><p>Database Query failed</p></html>");
-          });
-      return 0;
+    std::optional<std::string_view> cookie, sid;
+    db::Session *db = nullptr;
+    if ((cookie = headers.get_header("cookie"))) {
+      if ((sid = util::get_cookie(cookie.value(), "sid"))) {
+        if ((db = get_db_session())) {
+          db->send_query_params(
+              this, "SELECT id, user_id FROM session WHERE id=$1::UUID;",
+              {std::string(sid.value())},
+              [this](PGresult *result) {
+                if (PQresultStatus(result) == PGRES_TUPLES_OK &&
+                    PQntuples(result)) {
+                  // authenticated
+                  auto db = get_db_session();
+                  db->send_query(
+                      this, "SELECT name FROM users;",
+                      [this](PGresult *result) {
+                        if (PQresultStatus(result) == PGRES_TUPLES_OK) {
+                          this->submit_json_response("200",
+                                                     util::to_json(result));
+                        } else {
+                          this->submit_string_response("401", {},
+                                                       "Unuthorized");
+                        }
+                      },
+                      [this](PGresult *result) {
+                        this->submit_string_response("401", {}, "Unuthorized");
+                      });
+                } else {
+                  std::cerr << PQresultErrorMessage(result) << std::endl;
+                  this->submit_string_response("401", {}, "Unuthorized");
+                }
+              },
+              [this](PGresult *result) {
+                this->submit_string_response("401", {}, "Unuthorized");
+              });
+          return 0;
+        }
+      }
     } else {
       return submit_html_response(
-          "500", "<html><h1>500</h1><p>Not connected to database.</p></html>");
+          "401", "<html><h1>401</h1><p>Not Authorised.</p></html>");
     }
-
   } else {
     return submit_file_response();
   }

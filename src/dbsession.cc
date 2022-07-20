@@ -218,7 +218,7 @@ int Session::read() {
         break;
       case PGRES_FATAL_ERROR:
         std::cerr << "Encountered fatal error:" << std::endl;
-        // std::cerr << PQresultErrorMessage(result) << std::endl;
+        std::cerr << PQresultErrorMessage(result) << std::endl;
         if (stream_alive) {
           query.error_cb(result);
         }

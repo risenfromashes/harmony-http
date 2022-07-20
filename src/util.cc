@@ -643,4 +643,24 @@ std::string to_json(PGresult *res) {
   }
 }
 
+std::optional<std::string_view> get_cookie(std::string_view cookies,
+                                           std::string_view key) {
+  for (;;) {
+    auto kbeg = cookies.find_first_not_of(' ');
+    auto kend = cookies.find_first_of('=');
+    auto k = cookies.substr(kbeg, kend);
+
+    auto vbeg = kend + 1;
+    auto vend = cookies.find_first_of(";", vbeg);
+    auto v = cookies.substr(vbeg, vend);
+    if (streq_l(k, key)) {
+      return v;
+    }
+    if (vend == cookies.npos) {
+      break;
+    }
+    cookies = cookies.substr(vend + 1);
+  }
+  return std::nullopt;
+}
 } // namespace hm::util

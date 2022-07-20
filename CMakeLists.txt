@@ -12,8 +12,10 @@ endif()
 add_subdirectory(third_party/readerwriterqueue)
 add_subdirectory(third_party/simdjson EXCLUDE_FROM_ALL)
 add_subdirectory(third_party/stduuid)
-SET(ENABLE_STATIC_LIB TRUE)
-add_subdirectory(third_party/nghttp2)
+
+# don't include nghttp2 source
+# SET(ENABLE_STATIC_LIB TRUE)
+# add_subdirectory(third_party/nghttp2)
 
 # set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL REQUIRED)
@@ -51,7 +53,7 @@ target_link_libraries(harmony_http PRIVATE
   simdjson
   stduuid
   PostgreSQL::PostgreSQL 
-  nghttp2_static
+  nghttp2
   ev 
   OpenSSL::SSL
   OpenSSL::Crypto

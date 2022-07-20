@@ -278,4 +278,7 @@ inline std::string http_date(time_t t) {
 
 std::string to_json(PGresult *result);
 
+std::optional<std::string_view> get_cookie(std::string_view cookies,
+                                           std::string_view key);
+
 } // namespace hm::util
