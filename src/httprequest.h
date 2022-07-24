@@ -23,10 +23,16 @@ class HttpRequest {
     return *this;
   }
 
+  HttpRequest &on_data(std::function<void(std::string_view)> &&cb) {
+    on_data_cb_ = std::move(cb);
+    return *this;
+  }
+
 private:
   Stream *stream_;
   std::string body_;
   std::function<void(const std::string &body)> on_body_cb_;
+  std::function<void(std::string_view)> on_data_cb_;
 };
 
 } // namespace hm

@@ -118,7 +118,8 @@ Server::SSLContext Server::create_ssl_ctx() {
 
   // https://www.openssl.org/docs/man3.0/man3/SSL_set_options.html
   auto ssl_opts = SSL_OP_ALL | SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 |
-                  SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_COMPRESSION |
+                  SSL_OP_ENABLE_KTLS | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 |
+                  SSL_OP_NO_COMPRESSION |
                   SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION |
                   SSL_OP_NO_TICKET | SSL_OP_CIPHER_SERVER_PREFERENCE;
 

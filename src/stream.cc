@@ -193,18 +193,21 @@ void Stream::timeout_cb(struct ev_loop *loop, ev_timer *w, int revents) {
 
 int Stream::submit_response(std::string_view status, DataStream *data_stream) {
   int rv;
-  response_headers.nva[0] = util::make_nv(":status", status);
+  // response_headers.nva[0] = util::make_nv(":status", status);
+  // TODO: Update this code
+  response_headers.status = status.data();
+  response_headers.set_status();
+
+  auto [nvbuf, nvlen] = response_headers.get_buffer();
   nghttp2_data_provider dp;
   if (data_stream) {
     dp.source.ptr = data_stream;
     dp.read_callback = &HttpSession::data_read_cb;
-    rv = nghttp2_submit_response(session_->get_nghttp2_session(), id_,
-                                 response_headers.nva.data(),
-                                 response_headers.nvlen, &dp);
+    rv = nghttp2_submit_response(session_->get_nghttp2_session(), id_, nvbuf,
+                                 nvlen, &dp);
   } else {
-    rv = nghttp2_submit_response(session_->get_nghttp2_session(), id_,
-                                 response_headers.nva.data(),
-                                 response_headers.nvlen, nullptr);
+    rv = nghttp2_submit_response(session_->get_nghttp2_session(), id_, nvbuf,
+                                 nvlen, nullptr);
   }
   ev_io_start(session_->worker_->loop_, &session_->wev_);
   return rv;

@@ -4,6 +4,7 @@
 #include <atomic>
 #include <concepts>
 #include <cstdint>
+#include <iterator>
 #include <optional>
 #include <string_view>
 #include <variant>
@@ -158,7 +159,6 @@ public:
       ~RCBuf();
     } rcbuf;
 
-    uint32_t unindexed_headers_len = 0;
     size_t buffer_size = 0;
 
     std::optional<std::string_view> get_header(std::string_view header_name);
@@ -169,20 +169,55 @@ public:
   constexpr static size_t reserved_response_headers_len = 1;
 
   struct ResponseHeader {
-    inline constexpr static uint32_t max_nva_len = 20;
-
+    const char *status;
+    inline constexpr static uint32_t max_nva_len = 10;
     std::array<nghttp2_nv, max_nva_len> nva;
+    std::vector<nghttp2_nv> nvector;
 
     size_t nvlen = reserved_response_headers_len;
     // std::vector<nghttp2_nv> additional;
 
     /* name is string literal, value will be copied */
+    void push_header(const nghttp2_nv &nv) {
+      if (nvlen < max_nva_len) {
+        nva[nvlen] = nv;
+      } else {
+        if (nvlen == max_nva_len) {
+          std::move(nva.begin(), nva.end(), std::back_inserter(nvector));
+        }
+        nvector.push_back(nv);
+      }
+      nvlen++;
+    }
+
+    void set_header(const char *name, const char *value) {
+      push_header(util::make_nv(name, value, {false, false}));
+    }
+
     void set_header(const char *name, std::string_view value) {
-      nva[nvlen++] = util::make_nv(name, value, {false, true});
+      push_header(util::make_nv(name, value, {false, true}));
     }
     /* no copy */
     void set_header_nc(const char *name, std::string_view value) {
-      nva[nvlen++] = util::make_nv(name, value, {false, false});
+      push_header(util::make_nv(name, value, {false, false}));
+    }
+
+    /* to set :status header at the beginning of the buffer */
+    void set_status() {
+      auto nv = util::make_nv(":status", status, {false, false});
+      if (nvlen <= max_nva_len) {
+        nva[0] = nv;
+      } else {
+        nvector[0] = nv;
+      }
+    }
+
+    std::pair<nghttp2_nv *, size_t> get_buffer() {
+      if (nvlen <= max_nva_len) {
+        return {nva.data(), nvlen};
+      } else {
+        return {nvector.data(), nvlen};
+      }
     }
   } response_headers;
 
