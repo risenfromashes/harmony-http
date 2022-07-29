@@ -16,8 +16,8 @@
 namespace hm {
 
 Stream::Stream(HttpSession *session, int32_t stream_id)
-    : headers{}, session_(session), body_length_(0), body_offset_(0),
-      id_(stream_id) {
+    : headers{}, session_(session), request_(this), response_(this),
+      body_length_(0), body_offset_(0), id_(stream_id) {
   ev_timer_init(&rtimer_, timeout_cb, 0., 30.);
   ev_timer_init(&wtimer_, timeout_cb, 0., 30.);
   rtimer_.data = this;
@@ -32,14 +32,11 @@ Stream::~Stream() {
 }
 
 Stream::Headers::RCBuf::RCBuf() {
-  method = scheme = authority = host = path = expect = ims = nullptr;
+  scheme = authority = host = path = expect = ims = nullptr;
   nvlen = 0;
 }
 
 Stream::Headers::RCBuf::~RCBuf() {
-  if (method) {
-    nghttp2_rcbuf_decref(method);
-  }
   if (scheme) {
     nghttp2_rcbuf_decref(scheme);
   }
@@ -103,7 +100,8 @@ void Stream::Headers::add_header(nghttp2_rcbuf *name, nghttp2_rcbuf *value) {
   nghttp2_rcbuf_incref(value);
   switch (header_t) {
   case util::HttpHeader::pMETHOD:
-    rcbuf.method = value;
+    method = hm::method_from_string(get_string_view(value).value());
+    nghttp2_rcbuf_decref(value);
     break;
   case util::HttpHeader::pSCHEME:
     rcbuf.scheme = value;
@@ -191,11 +189,12 @@ void Stream::timeout_cb(struct ev_loop *loop, ev_timer *w, int revents) {
   }
 }
 
-int Stream::submit_response(std::string_view status, DataStream *data_stream) {
+int Stream::submit_response(DataStream *data_stream) {
   int rv;
-  // response_headers.nva[0] = util::make_nv(":status", status);
-  // TODO: Update this code
-  response_headers.status = status.data();
+  if (response_headers.status == nullptr) {
+    response_headers.status = "200";
+  }
+
   response_headers.set_status();
 
   auto [nvbuf, nvlen] = response_headers.get_buffer();
@@ -232,23 +231,16 @@ int Stream::submit_non_final_response(std::string_view status) {
   return rv;
 }
 
-int Stream::submit_string_response(
-    std::string_view status, std::initializer_list<string_view_pair> headers,
-    std::string &&response) {
+int Stream::submit_string_response(std::string &&response) {
   auto ss = add_data_stream<StringStream>(std::move(response));
-
-  for (auto &[name, value] : headers) {
-    response_headers.set_header_nc(name.data(), value);
-  }
 
   response_headers.set_header_nc("content-length",
                                  util::to_string(ss->length(), mem_block_));
 
-  return submit_response(status, ss);
+  return submit_response(ss);
 }
 
-int Stream::submit_html_response(std::string_view status,
-                                 std::string_view response) {
+int Stream::submit_html_response(std::string_view response) {
 
   auto ss = add_data_stream<StringStream>(response);
 
@@ -256,11 +248,10 @@ int Stream::submit_html_response(std::string_view status,
   response_headers.set_header_nc("content-length",
                                  util::to_string(ss->length(), mem_block_));
 
-  return submit_response(status, ss);
+  return submit_response(ss);
 }
 
-int Stream::submit_json_response(std::string_view status,
-                                 std::string &&response) {
+int Stream::submit_json_response(std::string &&response) {
 
   auto ss = add_data_stream<StringStream>(std::move(response));
 
@@ -268,15 +259,10 @@ int Stream::submit_json_response(std::string_view status,
   response_headers.set_header_nc("content-length",
                                  util::to_string(ss->length(), mem_block_));
 
-  return submit_response(status, ss);
+  return submit_response(ss);
 }
 
-int Stream::submit_file_response() {
-
-  auto path = path_;
-  if (path == "/") {
-    path = "/index.html";
-  }
+int Stream::submit_file_response(std::string_view path) {
 
   auto fs = get_static_file(path, true);
 
@@ -295,7 +281,8 @@ int Stream::submit_file_response() {
 
     if (last_mod_found && mtime <= last_mod) {
       response_headers.set_header_nc("date", date);
-      return submit_response("304", nullptr);
+      response_headers.status = "304";
+      return submit_response(nullptr);
     } else {
       response_headers.set_header_nc("content-type", fs->mime_type());
       response_headers.set_header_nc("content-length",
@@ -308,13 +295,21 @@ int Stream::submit_file_response() {
       response_headers.set_header_nc("date", date);
       response_headers.set_header_nc("last-modified",
                                      util::http_date(mtime, mem_block_));
-      return submit_response("200", fs);
+      return submit_response(fs);
     }
   } else {
-    return submit_html_response(
-        "404", "<html><h1>404</h1><p>Content not found.</p></html>");
+    response_headers.status = "404";
+    submit_json_response("<html><h1>404</h1><p>Content not found.</p></html>");
   }
   return -1;
+}
+
+int Stream::submit_file_response() {
+  auto path = path_;
+  if (path == "/") {
+    path = "/index.html";
+  }
+  return submit_file_response(path);
 }
 
 void Stream::parse_path() {
@@ -346,51 +341,13 @@ int Stream::prepare_response() {
 
   // TODO: Use Accept-Encoding to determine if compression is preferred
 
-  if (path_ == "/users") {
-    std::optional<std::string_view> cookie, sid;
-    db::Session *db = nullptr;
-    if ((cookie = headers.get_header("cookie"))) {
-      if ((sid = util::get_cookie(cookie.value(), "sid"))) {
-        if ((db = get_db_session())) {
-          db->send_query_params(
-              this, "SELECT id, user_id FROM session WHERE id=$1::UUID;",
-              {std::string(sid.value())},
-              [this](PGresult *result) {
-                if (PQresultStatus(result) == PGRES_TUPLES_OK &&
-                    PQntuples(result)) {
-                  // authenticated
-                  auto db = get_db_session();
-                  db->send_query(
-                      this, "SELECT name FROM users;",
-                      [this](PGresult *result) {
-                        if (PQresultStatus(result) == PGRES_TUPLES_OK) {
-                          this->submit_json_response("200",
-                                                     util::to_json(result));
-                        } else {
-                          this->submit_string_response("401", {},
-                                                       "Unuthorized");
-                        }
-                      },
-                      [this](PGresult *result) {
-                        this->submit_string_response("401", {}, "Unuthorized");
-                      });
-                } else {
-                  std::cerr << PQresultErrorMessage(result) << std::endl;
-                  this->submit_string_response("401", {}, "Unuthorized");
-                }
-              },
-              [this](PGresult *result) {
-                this->submit_string_response("401", {}, "Unuthorized");
-              });
-          return 0;
-        }
-      }
-    } else {
-      return submit_html_response(
-          "401", "<html><h1>401</h1><p>Not Authorised.</p></html>");
-    }
-  } else {
+  bool handled = !session_->get_server()->router_.dispatch_route(
+      headers.method, path_, &request_, &response_);
+  if (!handled && headers.method == HttpMethod::GET) {
     return submit_file_response();
+  } else {
+    response_headers.status = "400";
+    submit_json_response("<html><h1>400</h1><p>Bad Request.</p></html>");
   }
   return 0;
 }

@@ -30,6 +30,12 @@
 namespace hm {
 Server::Server(const Config &config)
     : config_(config), ssl_ctx_(nullptr, nullptr) {
+  if (!instance_) {
+    instance_ = this;
+  } else {
+    assert(false && "Only one server instance should exist.");
+  }
+
   loop_ = ev_default_loop(0);
   for (int i = 0; i < config_.num_threads; i++) {
     auto worker = std::make_unique<Worker>(this);
@@ -327,6 +333,16 @@ void Server::iterate_directory(std::string path) {
   }
 
   closedir(dir);
+}
+
+Server &Server::get(const char *route,
+                    std::invocable<HttpRequest *, HttpResponse *> auto &&cb) {
+  router_.add_route(HttpMethod::GET, route, std::forward<decltype(cb)>(cb));
+}
+
+Server &Server::post(const char *route,
+                     std::invocable<HttpRequest *, HttpResponse *> auto &&cb) {
+  router_.add_route(HttpMethod::POST, route, std::forward<decltype(cb)>(cb));
 }
 
 } // namespace hm

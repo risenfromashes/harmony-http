@@ -7,6 +7,7 @@
 #include <map>
 #include <mutex>
 #include <thread>
+#include <unordered_map>
 #include <unordered_set>
 
 #include <ev.h>
@@ -29,9 +30,18 @@ class Worker {
   friend class HttpSession;
   friend class Stream;
 
+  inline static std::unordered_map<std::thread::id, Worker *> workers_;
+
 public:
   Worker(Server *server);
   ~Worker();
+
+  static Worker *get_worker() {
+    if (workers_.contains(std::this_thread::get_id())) {
+      return workers_[std::this_thread::get_id()];
+    }
+    return nullptr;
+  }
 
   void run();
 

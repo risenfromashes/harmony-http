@@ -3,6 +3,27 @@
 #include "httprequest.h"
 
 namespace hm {
+
+HttpMethod method_from_string(std::string_view str) {
+  using enum HttpMethod;
+  if (util::streq_l(str, "GET")) {
+    return GET;
+  } else if (util::streq_l(str, "POST")) {
+    return POST;
+  } else if (util::streq_l(str, "PUT")) {
+    return PUT;
+  } else if (util::streq_l(str, "HEAD")) {
+    return HEAD;
+  } else if (util::streq_l(str, "PATCH")) {
+    return PATCH;
+  } else if (util::streq_l(str, "DELETE")) {
+    return DELETE;
+  } else if (util::streq_l(str, "OPTIONS")) {
+    return OPTIONS;
+  }
+  return GET;
+}
+
 RouteNode::RouteNode() {
   data.type = RouteNodeData::Type::ROOT;
   terminal = false;
@@ -91,7 +112,7 @@ void RouteNode::insert_path(HttpMethod method, std::string_view path,
 
 /* returns handler index */
 std::size_t RouteNode::match(HttpMethod method, std::string_view path,
-                             std::vector<std::string_view> &vars) {
+                             std::vector<std::string_view> &vars) const {
 
   auto m = (uint32_t)method;
 
@@ -180,9 +201,10 @@ void HttpRouter::add_route(HttpMethod method, const char *route_path,
 }
 
 bool HttpRouter::dispatch_route(HttpMethod method, std::string_view path,
-                                HttpRequest *request, HttpResponse *response) {
-  vars_.clear();
-  auto index = root_.match(method, path, vars_);
+                                HttpRequest *request,
+                                HttpResponse *response) const {
+  get_vars_vector().clear();
+  auto index = root_.match(method, path, get_vars_vector());
   if (index != RouteNode::npos) {
     request->router_ = this;
     request->handler_index_ = index;

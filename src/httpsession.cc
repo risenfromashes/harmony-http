@@ -484,52 +484,12 @@ int HttpSession::on_frame_recv_cb(nghttp2_session *session,
       return 0;
     }
 
-    // TODO: Handle POST/PUT: ON_DATA
-
-    // received full data
-    auto &parser = self->get_json_parser();
-    auto &body = stream->request_.body_;
-    body.reserve(body.size() + simdjson::SIMDJSON_PADDING);
-    auto doc = parser.iterate(body);
-    std::string_view user = doc["user"];
-    std::string_view password = doc["password"];
-
-    stream->get_db_session()->send_query_params(
-        stream,
-        "SELECT id, name,password FROM users WHERE name = $1::VARCHAR(20) AND "
-        "password = $2::VARCHAR(20);",
-        {std::string(user), std::string(password)},
-        [stream, user](PGresult *result) {
-          if (PQresultStatus(result) == PGRES_TUPLES_OK) {
-            if (PQntuples(result) == 0) {
-              stream->submit_html_response("401", "Unauthorized");
-            } else {
-              std::string id = PQgetvalue(result, 0, 0);
-              std::string uuid =
-                  uuids::to_string(stream->get_uuid_generator()->generate());
-              std::string cookie = "sid=" + uuid + "; Secure; HttpOnly";
-              stream->response_headers.set_header("set-cookie", cookie);
-              stream->submit_response("200", nullptr);
-              stream->get_db_session()->send_query_params(
-                  stream,
-                  "INSERT INTO session(id, user_id) VALUES($1::UUID, "
-                  "$2::INT4);",
-                  {uuid, id}, {}, [](PGresult *result) {
-                    std::cerr << PQresultErrorMessage(result) << std::endl;
-                  });
-            }
-          } else {
-            stream->submit_html_response("401", "Unauthorized");
-          }
-        },
-        [stream](PGresult *result) {
-          std::cerr << PQresultErrorMessage(result) << std::endl;
-          stream->submit_html_response("401", "Unauthorized");
-        });
-
     if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
       stream->stop_read_timeout();
       // TODO: Handle POST/PUT: ON_DATA_END
+      if (stream->request_.on_body_cb_) {
+        std::invoke(stream->request_.on_body_cb_, stream->request_.body_);
+      }
     } else {
       stream->reset_read_timeout();
     }
@@ -550,14 +510,10 @@ int HttpSession::on_frame_recv_cb(nghttp2_session *session,
       // Actual HTTP request headers received
 
       stream->parse_path();
-      auto method = stream->headers.method();
+      auto method = stream->headers.method;
 
-      if (method == "POST" || method == "PUT") {
-        // TODO: Handle POST/PUT: ON_DATA_START
-
-      } else if (method == "GET") {
-        stream->prepare_response();
-      }
+      // TODO: Handle POST/PUT: ON_DATA_START
+      stream->prepare_response();
     }
 
     if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {

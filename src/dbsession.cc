@@ -1,7 +1,9 @@
 #include <iterator>
 #include <postgresql/libpq-fe.h>
 
+#include "dberror.h"
 #include "dbquery.h"
+#include "dbresult.h"
 #include "dbsession.h"
 #include "stream.h"
 #include "worker.h"
@@ -315,8 +317,8 @@ int Session::write() {
 }
 
 void Session::send_query(Stream *stream, const char *command,
-                         std::function<void(PGresult *result)> &&on_sucess,
-                         std::function<void(PGresult *result)> &&on_error) {
+                         std::function<void(Result)> &&on_sucess,
+                         std::function<void(Error)> &&on_error) {
   queued_.emplace_back(db::Query{.stream_serial = stream->serial(),
                                  .is_sync_point = true,
                                  .arg = db::Query::QueryArg{.command = command},
@@ -326,11 +328,10 @@ void Session::send_query(Stream *stream, const char *command,
   ev_io_start(loop_, &wev_);
 }
 
-void Session::send_query_params(
-    Stream *stream, const char *command,
-    std::initializer_list<std::string> params,
-    std::function<void(PGresult *result)> &&on_sucess,
-    std::function<void(PGresult *result)> &&on_error) {
+void Session::send_query_params(Stream *stream, const char *command,
+                                std::initializer_list<std::string> params,
+                                std::function<void(Result)> &&on_sucess,
+                                std::function<void(Error)> &&on_error) {
   auto &query = queued_.emplace_back(
       db::Query{.stream_serial = stream->serial(),
                 .is_sync_point = true,

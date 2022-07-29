@@ -95,6 +95,7 @@ void Worker::run() {
   started_ = true;
   th_ = std::make_unique<std::thread>(
       [](struct ev_loop *loop) { ev_run(loop, 0); }, loop_);
+  workers_.emplace(th_->get_id(), this);
 }
 
 void Worker::accept_connection(int fd) {

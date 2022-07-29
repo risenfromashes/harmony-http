@@ -1,5 +1,6 @@
 #pragma once
 
+#include "httprouter.h"
 #include <memory>
 #include <optional>
 #include <thread>
@@ -9,9 +10,11 @@
 struct ssl_ctx_st;
 
 namespace hm {
-class HttpSession;
 class Worker;
 class FileStream;
+class HttpSession;
+class HttpRequest;
+class HttpResponse;
 
 class Server {
   friend class Worker;
@@ -20,6 +23,8 @@ class Server {
 
   using SSLContext =
       std::unique_ptr<struct ::ssl_ctx_st, void (*)(struct ::ssl_ctx_st *)>;
+
+  inline static Server *instance_ = nullptr;
 
 public:
   struct Config {
@@ -37,7 +42,14 @@ public:
 
   void connect_database(const char *connection_string);
 
+  Server &get(const char *route,
+              std::invocable<HttpRequest *, HttpResponse *> auto &&cb);
+  Server &post(const char *route,
+               std::invocable<HttpRequest *, HttpResponse *> auto &&cb);
+
   void listen(double timeout = 0.0);
+
+  friend Server *get_server() { return Server::instance_; }
 
 private:
   void iterate_directory(std::string path);
@@ -59,6 +71,9 @@ private:
   struct ev_loop *loop_;
 
   std::string static_root_;
+
+  HttpRouter router_;
   std::vector<std::unique_ptr<Worker>> workers_;
 };
+
 } // namespace hm

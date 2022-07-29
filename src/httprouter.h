@@ -15,6 +15,8 @@ class HttpResponse;
 
 enum class HttpMethod { GET, POST, PUT, HEAD, PATCH, DELETE, OPTIONS };
 
+HttpMethod method_from_string(std::string_view str);
+
 struct RouteNodeData {
   enum class Type { ROOT, CONSTANT, PARAM_INT, PARAM_FLOAT, PARAM_STRING };
 
@@ -46,7 +48,7 @@ struct RouteNode {
                    size_t handler_index);
   /* returns handler index */
   std::size_t match(HttpMethod method, std::string_view path,
-                    std::vector<std::string_view> &vars);
+                    std::vector<std::string_view> &vars) const;
 };
 
 class HttpRouter {
@@ -61,16 +63,21 @@ public:
     get_param(std::string_view label) const;
   };
 
+private:
+  auto &get_vars_vector() const {
+    thread_local std::vector<std::string_view> vars;
+    return vars;
+  }
+
 public:
   void add_route(HttpMethod method, const char *route_path,
                  std::invocable<HandlerData> auto &&handler);
 
   bool dispatch_route(HttpMethod method, std::string_view path,
-                      HttpRequest *request, HttpResponse *response);
+                      HttpRequest *request, HttpResponse *response) const;
 
 private:
   RouteNode root_;
-  std::vector<std::string_view> vars_;
   std::vector<std::function<void(HttpRequest *, HttpResponse *)>> handlers_;
   std::vector<const char *> route_paths_;
 };

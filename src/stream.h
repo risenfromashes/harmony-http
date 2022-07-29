@@ -18,6 +18,7 @@
 #include "filestream.h"
 #include "httprequest.h"
 #include "httpresponse.h"
+#include "httprouter.h"
 #include "stringstream.h"
 #include "util.h"
 
@@ -92,15 +93,14 @@ public:
   int submit_rst(uint32_t error_code);
   int submit_non_final_response(std::string_view status);
 
-  int submit_response(std::string_view status, DataStream *stream);
+  int submit_response(DataStream *stream);
   // int submit_string_response(std::string_view status,
   //                            std::initializer_list<string_view_pair> headers,
   //                            std::string_view response);
-  int submit_string_response(std::string_view status,
-                             std::initializer_list<string_view_pair> headers,
-                             std::string &&response);
-  int submit_html_response(std::string_view status, std::string_view response);
-  int submit_json_response(std::string_view status, std::string &&response);
+  int submit_string_response(std::string &&str);
+  int submit_html_response(std::string_view response);
+  int submit_json_response(std::string &&response);
+  int submit_file_response(std::string_view path);
   int submit_file_response();
 
   /* void prepare_status_response(...) */
@@ -118,9 +118,6 @@ public:
     }
 
   public:
-    std::optional<std::string_view> method() {
-      return get_string_view(rcbuf.method);
-    }
     std::optional<std::string_view> scheme() {
       return get_string_view(rcbuf.scheme);
     }
@@ -142,9 +139,9 @@ public:
 
     inline constexpr static uint32_t max_nva_len = 10;
 
+    HttpMethod method;
     struct RCBuf {
       using rcbuf_pair = std::pair<nghttp2_rcbuf *, nghttp2_rcbuf *>;
-      nghttp2_rcbuf *method;
       nghttp2_rcbuf *scheme;
       nghttp2_rcbuf *authority;
       nghttp2_rcbuf *host;
@@ -219,6 +216,8 @@ public:
         return {nvector.data(), nvlen};
       }
     }
+
+    ResponseHeader() : status(nullptr) {}
   } response_headers;
 
 private:
@@ -246,4 +245,5 @@ private:
   std::variant<std::monostate, StringStream, FileStream> data_stream_store_;
   DataStream *data_stream_ = nullptr;
 };
+
 } // namespace hm

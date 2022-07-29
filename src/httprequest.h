@@ -35,7 +35,9 @@ class HttpRequest {
   get_param(std::string_view label) const;
 
 private:
-  HttpRouter *router_;
+  HttpRequest(Stream *stream);
+
+  const HttpRouter *router_;
   size_t handler_index_;
 
   Stream *stream_;
@@ -51,7 +53,7 @@ HttpRequest::get_param(std::string_view label) const {
   size_t pos, index = 0;
   while ((pos = route.find('{')) != route.npos) {
     if (route.substr(pos + 1, label.size()) == label) {
-      return router_->vars_[index];
+      return router_->get_vars_vector()[index];
     }
     route = route.substr(pos + 1);
     index++;
