@@ -7,14 +7,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CMAKE_CXX_FLAGS "-fsanitize=address")
-  add_compile_definitions(DEBUG)
 endif()
 
 add_subdirectory(third_party/readerwriterqueue)
 add_subdirectory(third_party/simdjson EXCLUDE_FROM_ALL)
 add_subdirectory(third_party/stduuid)
 add_subdirectory(third_party/memory)
-add_subdirectory(third_party/r3)
 
 # don't include nghttp2 source
 # SET(ENABLE_STATIC_LIB TRUE)
@@ -53,7 +51,6 @@ add_library(
 target_link_libraries(harmony_http PRIVATE  
   -static-libgcc -static-libstdc++
   readerwriterqueue 
-  r3
   simdjson
   stduuid
   foonathan_memory
@@ -78,7 +75,6 @@ add_executable(exp
   src/exp.cc
 )
 
-target_link_libraries(exp PRIVATE r3)
 
 
 
