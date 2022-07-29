@@ -8,6 +8,8 @@ class Result {
   friend class Session;
 
 public:
+  enum class Status { ERROR, EMPTY, SINGLE, MANY };
+
   class Row {
     friend class Result;
     friend class Iterator;
@@ -66,6 +68,7 @@ public:
 
   std::string_view get(int row, const char *name);
 
+  bool is_error();
   std::string_view error_message();
 
   Result(void *pg_result);
@@ -77,7 +80,7 @@ public:
   ~Result();
 
 private:
-  bool is_error_;
+  Status status_;
   void *pg_result_;
   int n_rows_;
   int n_cols_;

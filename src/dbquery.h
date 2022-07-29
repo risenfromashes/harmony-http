@@ -1,8 +1,6 @@
 #pragma once
 
-#include "dberror.h"
 #include "dbresult.h"
-#include <postgresql/libpq-fe.h>
 
 #include <functional>
 #include <string>
@@ -42,15 +40,13 @@ struct Query {
 
   std::variant<QueryArg, QueryParamArg, PrepareArg, QueryPreparedArg> arg;
 
-  std::function<void(Result)> result_cb;
-  std::function<void(Error)> error_cb;
+  std::function<void(Result)> completion_cb;
 };
 
 struct DispatchedQuery {
   const uint64_t stream_serial;
   bool is_sync_point;
-  std::function<void(Result)> result_cb;
-  std::function<void(Error)> error_cb;
+  std::function<void(Result)> completion_cb;
 };
 
 } // namespace hm::db

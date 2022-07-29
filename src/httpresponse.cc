@@ -1,6 +1,7 @@
 #include "httpresponse.h"
 #include "stream.h"
 #include "stringstream.h"
+#include "worker.h"
 
 namespace hm {
 HttpResponse::HttpResponse(Stream *stream) : stream_(stream) {}
@@ -27,5 +28,7 @@ void HttpResponse::send(std::string &&str) {
 void HttpResponse::send_file(const char *path) {
   stream_->submit_file_response(path);
 }
+
+db::Connection HttpResponse::get_db_connection() { return stream_; }
 
 } // namespace hm

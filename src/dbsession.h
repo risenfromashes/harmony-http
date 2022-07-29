@@ -28,13 +28,11 @@ public:
   bool connected() { return connected_; }
 
   void send_query(Stream *stream, const char *command,
-                  std::function<void(Result)> &&on_sucess = {},
-                  std::function<void(Error)> &&on_error = {});
+                  std::function<void(Result)> &&cb);
 
   void send_query_params(Stream *stream, const char *command,
-                         std::initializer_list<std::string> params,
-                         std::function<void(Result)> &&on_sucess = {},
-                         std::function<void(Error)> &&on_error = {});
+                         std::vector<std::string> &&params,
+                         std::function<void(Result)> &&cb);
 
 private:
   static void read_cb(struct ev_loop *loop, ev_io *w, int revents);

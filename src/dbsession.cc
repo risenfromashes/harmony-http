@@ -1,7 +1,6 @@
 #include <iterator>
 #include <postgresql/libpq-fe.h>
 
-#include "dberror.h"
 #include "dbquery.h"
 #include "dbresult.h"
 #include "dbsession.h"
@@ -170,6 +169,15 @@ int Session::connection_made() {
   return 0;
 }
 
+static void handle_result(DispatchedQuery &query, PGresult *result,
+                          bool alive) {
+  if (alive) {
+    query.completion_cb(result);
+  } else {
+    PQclear(result);
+  }
+}
+
 int Session::read() {
   int rv = PQconsumeInput(conn_);
 
@@ -193,47 +201,27 @@ int Session::read() {
     // until there's a nullptr this query isn't finished
     while ((result = PQgetResult(conn_)) != nullptr) {
       switch (PQresultStatus(result)) {
+      case PGRES_COMMAND_OK:
+      case PGRES_TUPLES_OK:
+      case PGRES_SINGLE_TUPLE:
+        handle_result(query, result, stream_alive);
+        break;
+
+      case PGRES_NONFATAL_ERROR:
+      case PGRES_FATAL_ERROR:
+      case PGRES_PIPELINE_ABORTED:
+        // will be handled as error
+        handle_result(query, result, stream_alive);
+        break;
+
       case PGRES_EMPTY_QUERY:
         std::cerr << "Application sent empty query" << std::endl;
-        break;
-      case PGRES_COMMAND_OK:
-        if (stream_alive) {
-          query.result_cb(result);
-        }
-        break;
-      case PGRES_TUPLES_OK:
-        if (stream_alive) {
-          query.result_cb(result);
-        }
+        PQclear(result);
         break;
       case PGRES_BAD_RESPONSE:
         std::cerr << "Server sent bad response" << std::endl;
         error = true;
-        break;
-      case PGRES_NONFATAL_ERROR:
-        std::cerr << "Encountered non-fatal error:" << std::endl;
-        std::cerr << PQresultErrorMessage(result) << std::endl;
-
-        if (stream_alive) {
-          query.result_cb(result);
-        }
-        break;
-      case PGRES_FATAL_ERROR:
-        std::cerr << "Encountered fatal error:" << std::endl;
-        std::cerr << PQresultErrorMessage(result) << std::endl;
-        if (stream_alive) {
-          query.error_cb(result);
-        }
-        break;
-      case PGRES_SINGLE_TUPLE:
-        if (stream_alive) {
-          query.result_cb(result);
-        }
-        break;
-      case PGRES_PIPELINE_ABORTED:
-        if (stream_alive) {
-          query.error_cb(result);
-        }
+        PQclear(result);
         break;
       case PGRES_PIPELINE_SYNC:
         assert(query.is_sync_point &&
@@ -245,6 +233,7 @@ int Session::read() {
       case PGRES_COPY_BOTH:
         std::cerr << "Error: No copy operations should occur" << std::endl;
         error = true;
+        PQclear(result);
         break;
       }
       if (pipeline_sync) {
@@ -257,8 +246,6 @@ int Session::read() {
     if (!query.is_sync_point || pipeline_sync) {
       dispatched_.pop_front();
     }
-
-    PQclear(result);
 
     if (error) {
       return -1;
@@ -302,8 +289,7 @@ int Session::write() {
       dispatched_.emplace_back(
           db::DispatchedQuery{.stream_serial = query.stream_serial,
                               .is_sync_point = query.is_sync_point,
-                              .result_cb = std::move(query.result_cb),
-                              .error_cb = std::move(query.error_cb)});
+                              .completion_cb = std::move(query.completion_cb)});
       queued_.pop_front();
     }
 
@@ -317,27 +303,24 @@ int Session::write() {
 }
 
 void Session::send_query(Stream *stream, const char *command,
-                         std::function<void(Result)> &&on_sucess,
-                         std::function<void(Error)> &&on_error) {
+                         std::function<void(Result)> &&cb) {
   queued_.emplace_back(db::Query{.stream_serial = stream->serial(),
                                  .is_sync_point = true,
                                  .arg = db::Query::QueryArg{.command = command},
-                                 .result_cb = std::move(on_sucess),
-                                 .error_cb = std::move(on_error)});
+                                 .completion_cb = std::move(cb)});
   // sending query start writing
   ev_io_start(loop_, &wev_);
 }
 
 void Session::send_query_params(Stream *stream, const char *command,
-                                std::initializer_list<std::string> params,
-                                std::function<void(Result)> &&on_sucess,
-                                std::function<void(Error)> &&on_error) {
+                                std::vector<std::string> &&vec,
+                                std::function<void(Result)> &&cb) {
   auto &query = queued_.emplace_back(
       db::Query{.stream_serial = stream->serial(),
                 .is_sync_point = true,
-                .arg = db::Query::QueryParamArg{.command = command},
-                .result_cb = std::move(on_sucess),
-                .error_cb = std::move(on_error)});
+                .arg = db::Query::QueryParamArg{.command = command,
+                                                .param_vector = std::move(vec)},
+                .completion_cb = std::move(cb)});
   auto &param_vec = std::get<db::Query::QueryParamArg>(query.arg).param_vector;
   std::move(params.begin(), params.end(), std::back_inserter(param_vec));
   // sending query start writing
