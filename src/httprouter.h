@@ -71,7 +71,7 @@ private:
 
 public:
   void add_route(HttpMethod method, const char *route_path,
-                 std::invocable<HandlerData> auto &&handler);
+                 std::invocable<HttpRequest *, HttpResponse *> auto &&handler);
 
   bool dispatch_route(HttpMethod method, std::string_view path,
                       HttpRequest *request, HttpResponse *response) const;
@@ -94,4 +94,15 @@ constexpr bool operator==(const RouteNode &a, const RouteNodeData &b) {
 constexpr bool operator==(const RouteNodeData &b, const RouteNode &a) {
   return a == b;
 }
+
+void HttpRouter::add_route(
+    HttpMethod method, const char *route_path,
+    std::invocable<HttpRequest *, HttpResponse *> auto &&handler) {
+  assert(handlers_.size() == route_paths_.size());
+  size_t handler_index = handlers_.size();
+  handlers_.emplace_back(std::move(handler));
+  route_paths_.emplace_back(std::move(route_path));
+  root_.insert_path(method, route_path, handler_index);
+}
+
 } // namespace hm

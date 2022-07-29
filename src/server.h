@@ -76,4 +76,16 @@ private:
   std::vector<std::unique_ptr<Worker>> workers_;
 };
 
+Server &Server::get(const char *route,
+                    std::invocable<HttpRequest *, HttpResponse *> auto &&cb) {
+  router_.add_route(HttpMethod::GET, route, std::forward<decltype(cb)>(cb));
+  return *this;
+}
+
+Server &Server::post(const char *route,
+                     std::invocable<HttpRequest *, HttpResponse *> auto &&cb) {
+  router_.add_route(HttpMethod::POST, route, std::forward<decltype(cb)>(cb));
+  return *this;
+}
+
 } // namespace hm

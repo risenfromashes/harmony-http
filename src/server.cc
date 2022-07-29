@@ -335,14 +335,4 @@ void Server::iterate_directory(std::string path) {
   closedir(dir);
 }
 
-Server &Server::get(const char *route,
-                    std::invocable<HttpRequest *, HttpResponse *> auto &&cb) {
-  router_.add_route(HttpMethod::GET, route, std::forward<decltype(cb)>(cb));
-}
-
-Server &Server::post(const char *route,
-                     std::invocable<HttpRequest *, HttpResponse *> auto &&cb) {
-  router_.add_route(HttpMethod::POST, route, std::forward<decltype(cb)>(cb));
-}
-
 } // namespace hm

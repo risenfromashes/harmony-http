@@ -341,8 +341,12 @@ int Stream::prepare_response() {
 
   // TODO: Use Accept-Encoding to determine if compression is preferred
 
+  // TODO: Don't do handler lookup for obvious file request and vice versa
+
   bool handled = !session_->get_server()->router_.dispatch_route(
       headers.method, path_, &request_, &response_);
+
+  std::cerr << handled << " " << (int)headers.method << std::endl;
   if (!handled && headers.method == HttpMethod::GET) {
     return submit_file_response();
   } else {

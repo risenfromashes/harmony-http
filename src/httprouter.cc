@@ -1,6 +1,7 @@
 
 #include "httprouter.h"
 #include "httprequest.h"
+#include "httpresponse.h"
 
 namespace hm {
 
@@ -189,15 +190,6 @@ std::size_t RouteNode::match(HttpMethod method, std::string_view path,
   }
 
   return npos;
-}
-
-void HttpRouter::add_route(HttpMethod method, const char *route_path,
-                           std::invocable<HandlerData> auto &&handler) {
-  assert(handlers_.size() == route_paths_.size());
-  size_t handler_index = handlers_.size();
-  handlers_.push_back(std::move(handler));
-  route_paths_.push_back(std::move(route_path));
-  root_.insert_path(method, route_path, handler_index);
 }
 
 bool HttpRouter::dispatch_route(HttpMethod method, std::string_view path,

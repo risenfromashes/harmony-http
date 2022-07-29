@@ -33,6 +33,16 @@ add_library(
   src/dbsession.h
   src/dbsession.cc
   src/dbquery.h
+  src/dbresult.h
+  src/dbresult.cc
+  src/dbconnection.h
+  src/dbconnection.cc
+  src/httprouter.h
+  src/httprouter.cc
+  src/httprequest.h
+  src/httprequest.cc
+  src/httpresponse.h
+  src/httpresponse.cc
   src/httpsession.h
   src/httpsession.cc
   src/stream.h
@@ -43,6 +53,8 @@ add_library(
   src/stringstream.h
   src/stringstream.cc
   src/buffer.h
+  src/uuidgenerator.h
+  src/task.h
   src/util.h
   src/util.cc
 )

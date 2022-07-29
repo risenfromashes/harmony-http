@@ -321,8 +321,6 @@ void Session::send_query_params(Stream *stream, const char *command,
                 .arg = db::Query::QueryParamArg{.command = command,
                                                 .param_vector = std::move(vec)},
                 .completion_cb = std::move(cb)});
-  auto &param_vec = std::get<db::Query::QueryParamArg>(query.arg).param_vector;
-  std::move(params.begin(), params.end(), std::back_inserter(param_vec));
   // sending query start writing
   ev_io_start(loop_, &wev_);
 }
