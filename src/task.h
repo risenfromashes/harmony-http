@@ -1,30 +1,50 @@
+#pragma once
+
 #include <concepts>
 #include <coroutine>
 #include <optional>
 
 // basic coroutine resumable task
 namespace hm {
+
+template <class T = void> struct Promise;
+template <class T = void> struct Awaitable;
+
 template <class T = void> class Task {
 public:
-  struct promise_type;
-  struct awaitable;
+  using promise_type = Promise<T>;
 
   using handle_type = std::coroutine_handle<promise_type>;
 
+  // empty task
+  Task() : handle_(nullptr) {}
   Task(handle_type handle) : handle_(handle) {}
   Task(Task &&other) : handle_(other.handle_) { other.handle_ = nullptr; }
+
   Task &operator=(Task &&other) {
-    handle_.destroy();
+    if (handle_) {
+      handle_.destroy();
+    }
     handle_ = other.handle_;
     other.handle_ = nullptr;
+    return *this;
   }
 
   Task(const Task &) = delete;
   Task &operator=(const Task &) = delete;
 
+  operator bool() { return handle_; }
+
   void resume() {
     if (handle_ && !handle_.done()) {
       handle_.resume();
+    }
+  }
+
+  void
+  set_result(std::convertible_to<T> auto &&v) requires(!std::same_as<T, void>) {
+    if (handle_ && !handle_.done()) {
+      handle_.promise().set_value(std::forward<decltype(v)>(v));
     }
   }
 
@@ -41,21 +61,23 @@ public:
     }
   }
 
-  auto operator co_await() { return awaitable(); }
+  auto operator co_await();
 
 private:
   handle_type handle_;
 };
 
-template <class T> struct Task<T>::promise_type {
+template <class T> struct Promise {
+  using handle_type = std::coroutine_handle<Promise<T>>;
+
   T value_;
 
-  auto initial_suspend() {
+  auto initial_suspend() noexcept {
     // not lazy start immediately
     return std::suspend_never{};
   }
 
-  auto final_suspend() {
+  auto final_suspend() noexcept {
     // always suspend let destructor of task destroy coroutine
     return std::suspend_always{};
   }
@@ -67,18 +89,26 @@ template <class T> struct Task<T>::promise_type {
     return handle_type::from_promise(*this);
   }
 
-  void return_value(std::convertible_to<T> auto &&v) {
+  Task<T> get_task() { return get_return_object(); }
+
+  void set_value(std::convertible_to<T> auto &&v) {
     value_ = std::forward<decltype(v)>(v);
+  }
+
+  void return_value(std::convertible_to<T> auto &&v) {
+    set_value(std::forward<decltype(v)>(v));
   }
 };
 
-template <> struct Task<void>::promise_type {
-  auto initial_suspend() {
+template <> struct Promise<void> {
+  using handle_type = std::coroutine_handle<Promise<>>;
+
+  auto initial_suspend() noexcept {
     // not lazy start immediately
     return std::suspend_never{};
   }
 
-  auto final_suspend() {
+  auto final_suspend() noexcept {
     // always suspend let destructor of task destroy coroutine
     return std::suspend_always{};
   }
@@ -90,10 +120,15 @@ template <> struct Task<void>::promise_type {
     return handle_type::from_promise(*this);
   }
 
+  Task<> get_task() { return get_return_object(); }
+
   void return_void() {}
 };
 
-template <class T> struct Task<T>::awaitable {
+template <class T> struct Awaitable {
+  using promise_type = Promise<T>;
+  using handle_type = std::coroutine_handle<Promise<T>>;
+
   promise_type *promise_;
 
   bool await_ready() { return false; }
@@ -103,7 +138,9 @@ template <class T> struct Task<T>::awaitable {
   T await_resume() { return promise_->value_; }
 };
 
-template <> struct Task<void>::awaitable {
+template <> struct Awaitable<void> {
+  using promise_type = Promise<>;
+  using handle_type = std::coroutine_handle<Promise<>>;
 
   bool await_ready() { return false; }
 
@@ -111,5 +148,7 @@ template <> struct Task<void>::awaitable {
 
   void await_resume() {}
 };
+
+template <class T> auto Task<T>::operator co_await() { return Awaitable(); }
 
 } // namespace hm

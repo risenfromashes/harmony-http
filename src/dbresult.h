@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string_view>
 
 namespace hm::db {
@@ -22,8 +23,12 @@ public:
       return result_->value_at(row_index_, index);
     }
 
-    std::string_view get(const char *name) {
+    std::optional<std::string_view> get(const char *name) {
       return result_->get(row_index_, name);
+    }
+
+    std::optional<std::string_view> operator[](const char *name) {
+      return get(name);
     }
 
   private:
@@ -49,7 +54,8 @@ public:
     Row *operator->() { return &row_; }
 
     friend bool operator==(const Iterator &a, const Iterator &b) {
-      return a.row_.row_index_ == b.row_.row_index_;
+      return a.row_.result_ == b.row_.result_ &&
+             a.row_.row_index_ == b.row_.row_index_;
     }
 
   private:
@@ -66,14 +72,19 @@ public:
   std::string_view name_at(int col);
   std::string_view value_at(int row, int col);
 
-  std::string_view get(int row, const char *name);
+  std::optional<std::string_view> get(int row, const char *name);
+  std::optional<std::string_view> get(const char *name);
+
+  Row operator[](int row);
 
   bool is_error();
   std::string_view error_message();
 
+  std::string to_json();
+
   Result(void *pg_result);
   Result(Result &&b);
-  Result &operator=(Result &b);
+  Result &operator=(Result &&b);
 
   Result(const Result &) = delete;
   Result &operator=(const Result &) = delete;

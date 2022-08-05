@@ -46,6 +46,9 @@ Worker::~Worker() {
   }
   // need to destroy sessions first which use loop_
   sessions_.clear();
+  if (dbsession_) {
+    dbsession_.reset();
+  }
   nghttp2_session_callbacks_del(callbacks_);
   nghttp2_option_del(options_);
   files_.clear();

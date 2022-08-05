@@ -240,9 +240,9 @@ int Stream::submit_string_response(std::string &&response) {
   return submit_response(ss);
 }
 
-int Stream::submit_html_response(std::string_view response) {
+int Stream::submit_html_response(std::string &&response) {
 
-  auto ss = add_data_stream<StringStream>(response);
+  auto ss = add_data_stream<StringStream>(std::move(response));
 
   response_headers.set_header_nc("content-type", "text/html; charset=utf-8");
   response_headers.set_header_nc("content-length",
@@ -343,11 +343,12 @@ int Stream::prepare_response() {
 
   // TODO: Don't do handler lookup for obvious file request and vice versa
 
-  bool handled = !session_->get_server()->router_.dispatch_route(
-      headers.method, path_, &request_, &response_);
-
-  std::cerr << handled << " " << (int)headers.method << std::endl;
-  if (!handled && headers.method == HttpMethod::GET) {
+  if (session_->get_server()->router_.dispatch_route(headers.method, path_,
+                                                     &request_, &response_)) {
+    return 0;
+  }
+  // unhandled, might be a file request
+  if (headers.method == HttpMethod::GET) {
     return submit_file_response();
   } else {
     response_headers.status = "400";

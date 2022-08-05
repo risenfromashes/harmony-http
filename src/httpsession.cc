@@ -509,7 +509,6 @@ int HttpSession::on_frame_recv_cb(nghttp2_session *session,
       }
 
       // Actual HTTP request headers received
-
       stream->parse_path();
       auto method = stream->headers.method;
 

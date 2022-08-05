@@ -34,6 +34,7 @@ class Stream {
   friend class StringStream;
   friend class FileStream;
   friend class HttpRequest;
+  friend class HttpRouter;
 
 public:
   using string_view_pair = std::pair<std::string_view, std::string_view>;
@@ -98,7 +99,7 @@ public:
   //                            std::initializer_list<string_view_pair> headers,
   //                            std::string_view response);
   int submit_string_response(std::string &&str);
-  int submit_html_response(std::string_view response);
+  int submit_html_response(std::string &&response);
   int submit_json_response(std::string &&response);
   int submit_file_response(std::string_view path);
   int submit_file_response();
@@ -244,6 +245,8 @@ private:
 
   std::variant<std::monostate, StringStream, FileStream> data_stream_store_;
   DataStream *data_stream_ = nullptr;
+
+  Task<> task_;
 };
 
 } // namespace hm

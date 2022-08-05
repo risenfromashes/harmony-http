@@ -23,6 +23,8 @@ public:
   void set_header_nc(const char *name, std::string_view value);
 
   void send(std::string &&str);
+  void send_html(std::string &&str);
+  void send_json(std::string &&str);
   void send_file(const char *path);
 
   db::Connection get_db_connection();

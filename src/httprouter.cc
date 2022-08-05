@@ -2,6 +2,7 @@
 #include "httprouter.h"
 #include "httprequest.h"
 #include "httpresponse.h"
+#include "stream.h"
 
 namespace hm {
 
@@ -200,7 +201,13 @@ bool HttpRouter::dispatch_route(HttpMethod method, std::string_view path,
   if (index != RouteNode::npos) {
     request->router_ = this;
     request->handler_index_ = index;
-    std::invoke(handlers_[index], request, response);
+    if (std::holds_alternative<coro_func>(handlers_[index])) {
+      auto &h = std::get<coro_func>(handlers_[index]);
+      request->stream_->task_ = std::invoke(h, request, response);
+    } else {
+      auto &h = std::get<func>(handlers_[index]);
+      std::invoke(h, request, response);
+    }
     return true;
   }
   return false;

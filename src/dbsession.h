@@ -8,6 +8,9 @@
 #include <deque>
 #include <memory>
 
+#include "dbresult.h"
+#include "task.h"
+
 namespace hm {
 
 class Worker;
@@ -27,9 +30,12 @@ public:
 
   bool connected() { return connected_; }
 
+  void send_query(Stream *stream, const char *command, QueryAwaitable *q);
   void send_query(Stream *stream, const char *command,
                   std::function<void(Result)> &&cb);
 
+  void send_query_params(Stream *stream, const char *command,
+                         std::vector<std::string> &&params, QueryAwaitable *q);
   void send_query_params(Stream *stream, const char *command,
                          std::vector<std::string> &&params,
                          std::function<void(Result)> &&cb);

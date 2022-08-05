@@ -4,8 +4,10 @@
 #include <cassert>
 #include <functional>
 #include <string_view>
+#include <variant>
 #include <vector>
 
+#include "task.h"
 #include "util.h"
 
 namespace hm {
@@ -52,6 +54,9 @@ struct RouteNode {
 };
 
 class HttpRouter {
+  using func = std::function<void(HttpRequest *, HttpResponse *)>;
+  using coro_func = std::function<Task<>(HttpRequest *, HttpResponse *)>;
+
   friend class HttpRequest;
 
 public:
@@ -78,7 +83,7 @@ public:
 
 private:
   RouteNode root_;
-  std::vector<std::function<void(HttpRequest *, HttpResponse *)>> handlers_;
+  std::vector<std::variant<func, coro_func>> handlers_;
   std::vector<const char *> route_paths_;
 };
 
@@ -95,12 +100,21 @@ constexpr bool operator==(const RouteNodeData &b, const RouteNode &a) {
   return a == b;
 }
 
+template <class T>
+concept CoroFunc = requires(T a, HttpRequest *rq, HttpResponse *rs) {
+  { a(rq, rs) } -> std::same_as<Task<>>;
+};
+
 void HttpRouter::add_route(
     HttpMethod method, const char *route_path,
     std::invocable<HttpRequest *, HttpResponse *> auto &&handler) {
   assert(handlers_.size() == route_paths_.size());
   size_t handler_index = handlers_.size();
-  handlers_.emplace_back(std::move(handler));
+  if constexpr (CoroFunc<decltype(handler)>) {
+    handlers_.emplace_back(std::in_place_type<coro_func>, std::move(handler));
+  } else {
+    handlers_.emplace_back(std::in_place_type<func>, std::move(handler));
+  }
   route_paths_.emplace_back(std::move(route_path));
   root_.insert_path(method, route_path, handler_index);
 }

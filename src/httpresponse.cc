@@ -25,6 +25,14 @@ void HttpResponse::send(std::string &&str) {
   stream_->submit_string_response(std::move(str));
 }
 
+void HttpResponse::send_html(std::string &&str) {
+  stream_->submit_html_response(std::move(str));
+}
+
+void HttpResponse::send_json(std::string &&str) {
+  stream_->submit_json_response(std::move(str));
+}
+
 void HttpResponse::send_file(const char *path) {
   stream_->submit_file_response(path);
 }

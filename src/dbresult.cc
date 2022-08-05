@@ -1,6 +1,9 @@
-#include "dbresult.h"
 #include <cassert>
 #include <libpq-fe.h>
+#include <string>
+
+#include "dbresult.h"
+#include "util.h"
 
 namespace hm::db {
 
@@ -8,18 +11,31 @@ namespace hm::db {
 
 std::string_view Result::name_at(int col) {
   assert(status_ == Status::MANY);
+  assert(col < n_cols_);
   return PQfname(pg_result, col); //
 }
 
 std::string_view Result::value_at(int row, int col) {
   assert(status_ == Status::MANY);
+  assert(row < n_rows_);
+  assert(col < n_cols_);
   return PQgetvalue(pg_result, row, col);
 }
 
-std::string_view Result::get(int row, const char *name) {
+std::optional<std::string_view> Result::get(int row, const char *name) {
   assert(status_ == Status::MANY);
-  return PQgetvalue(pg_result, row, PQfnumber(pg_result, name));
+  if (int col = PQfnumber(pg_result, name); col >= 0) {
+    return value_at(row, col);
+  }
+  return std::nullopt;
 }
+
+std::optional<std::string_view> Result::get(const char *name) {
+  assert(status_ == Status::SINGLE || n_rows_ == 1);
+  return get(0, name);
+}
+
+Result::Row Result::operator[](int row) { return Row(row, this); }
 
 bool Result::is_error() { return status_ == Result::Status::ERROR; }
 
@@ -31,13 +47,13 @@ std::string_view Result::error_message() {
 Result::Result(void *pgres) : pg_result_(pgres) {
   auto status = PQresultStatus(pg_result);
   switch (status) {
-  PGRES_COMMAND_OK:
+  case PGRES_COMMAND_OK:
     status_ = Status::EMPTY;
     break;
-  PGRES_TUPLES_OK:
+  case PGRES_TUPLES_OK:
     status_ = Status::MANY;
     break;
-  PGRES_SINGLE_TUPLE:
+  case PGRES_SINGLE_TUPLE:
     status_ = Status::SINGLE;
     break;
   default:
@@ -54,7 +70,7 @@ Result::Result(Result &&b) : pg_result_(b.pg_result_) {
   b.pg_result_ = nullptr;
 }
 
-Result &Result::operator=(Result &b) {
+Result &Result::operator=(Result &&b) {
   if (pg_result_) {
     PQclear(pg_result);
   }
@@ -64,6 +80,8 @@ Result &Result::operator=(Result &b) {
   b.pg_result_ = nullptr;
   return *this;
 }
+
+std::string Result::to_json() { return util::to_json(pg_result); }
 
 Result::~Result() { PQclear(pg_result); }
 

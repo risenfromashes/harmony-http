@@ -43,18 +43,18 @@ std::unique_ptr<Session> Session::create(Worker *worker,
 }
 
 Session::~Session() {
+  PQfinish(conn_);
   ev_io_stop(loop_, &rev_);
   ev_io_stop(loop_, &wev_);
-  PQfinish(conn_);
 }
 
 int Session::send_query(db::Query &query) {
   int rv = -1;
-  if (std::holds_alternative<Query::QueryArg>(query.arg)) {
-    auto &arg = std::get<Query::QueryArg>(query.arg);
+  if (std::holds_alternative<QueryArg>(query.arg)) {
+    auto &arg = std::get<QueryArg>(query.arg);
     rv = PQsendQuery(conn_, arg.command);
-  } else if (std::holds_alternative<Query::QueryParamArg>(query.arg)) {
-    auto &arg = std::get<Query::QueryParamArg>(query.arg);
+  } else if (std::holds_alternative<QueryParamArg>(query.arg)) {
+    auto &arg = std::get<QueryParamArg>(query.arg);
 
     assert(arg.param_vector.size() <= 20 && "parameter size too large");
     const char *values[20];
@@ -68,13 +68,13 @@ int Session::send_query(db::Query &query) {
                            /* length not required in text format */ nullptr,
                            /* all in text format */ nullptr,
                            /* result in text format */ 0);
-  } else if (std::holds_alternative<Query::PrepareArg>(query.arg)) {
-    auto &arg = std::get<Query::PrepareArg>(query.arg);
+  } else if (std::holds_alternative<PrepareArg>(query.arg)) {
+    auto &arg = std::get<PrepareArg>(query.arg);
     rv = PQsendPrepare(conn_, arg.statement, arg.query, arg.n_params,
                        /* param types implicit */ nullptr);
 
-  } else if (std::holds_alternative<Query::QueryPreparedArg>(query.arg)) {
-    auto &arg = std::get<Query::QueryPreparedArg>(query.arg);
+  } else if (std::holds_alternative<QueryPreparedArg>(query.arg)) {
+    auto &arg = std::get<QueryPreparedArg>(query.arg);
 
     assert(arg.param_vector.size() <= 20 && "parameter size too large");
     const char *values[20];
@@ -172,7 +172,14 @@ int Session::connection_made() {
 static void handle_result(DispatchedQuery &query, PGresult *result,
                           bool alive) {
   if (alive) {
-    query.completion_cb(result);
+    auto &handler = query.completion_handler;
+    if (std::holds_alternative<QueryAwaitable *>(handler)) {
+      auto q = std::get<QueryAwaitable *>(handler);
+      q->resume(result);
+    } else {
+      auto &t = std::get<std::function<void(Result)>>(handler);
+      t(result);
+    }
   } else {
     PQclear(result);
   }
@@ -227,6 +234,7 @@ int Session::read() {
         assert(query.is_sync_point &&
                "SYNC must occur on query that is marked sync point");
         pipeline_sync = true;
+        PQclear(result);
         break;
       case PGRES_COPY_IN:
       case PGRES_COPY_OUT:
@@ -286,10 +294,10 @@ int Session::write() {
           return -1;
         }
       }
-      dispatched_.emplace_back(
-          db::DispatchedQuery{.stream_serial = query.stream_serial,
-                              .is_sync_point = query.is_sync_point,
-                              .completion_cb = std::move(query.completion_cb)});
+      dispatched_.emplace_back(db::DispatchedQuery{
+          .stream_serial = query.stream_serial,
+          .is_sync_point = query.is_sync_point,
+          .completion_handler = std::move(query.completion_handler)});
       queued_.pop_front();
     }
 
@@ -303,24 +311,46 @@ int Session::write() {
 }
 
 void Session::send_query(Stream *stream, const char *command,
+                         QueryAwaitable *q) {
+  queued_.emplace_back(db::Query{.stream_serial = stream->serial(),
+                                 .is_sync_point = true,
+                                 .arg = db::QueryArg{.command = command},
+                                 .completion_handler = q});
+  // sending query start writing
+  ev_io_start(loop_, &wev_);
+}
+
+void Session::send_query(Stream *stream, const char *command,
                          std::function<void(Result)> &&cb) {
   queued_.emplace_back(db::Query{.stream_serial = stream->serial(),
                                  .is_sync_point = true,
-                                 .arg = db::Query::QueryArg{.command = command},
-                                 .completion_cb = std::move(cb)});
+                                 .arg = db::QueryArg{.command = command},
+                                 .completion_handler = std::move(cb)});
   // sending query start writing
   ev_io_start(loop_, &wev_);
 }
 
 void Session::send_query_params(Stream *stream, const char *command,
                                 std::vector<std::string> &&vec,
+                                QueryAwaitable *q) {
+  auto &query = queued_.emplace_back(
+      db::Query{.stream_serial = stream->serial(),
+                .is_sync_point = true,
+                .arg = db::QueryParamArg{.command = command,
+                                         .param_vector = std::move(vec)},
+                .completion_handler = q});
+  // sending query start writing
+  ev_io_start(loop_, &wev_);
+}
+void Session::send_query_params(Stream *stream, const char *command,
+                                std::vector<std::string> &&vec,
                                 std::function<void(Result)> &&cb) {
   auto &query = queued_.emplace_back(
       db::Query{.stream_serial = stream->serial(),
                 .is_sync_point = true,
-                .arg = db::Query::QueryParamArg{.command = command,
-                                                .param_vector = std::move(vec)},
-                .completion_cb = std::move(cb)});
+                .arg = db::QueryParamArg{.command = command,
+                                         .param_vector = std::move(vec)},
+                .completion_handler = std::move(cb)});
   // sending query start writing
   ev_io_start(loop_, &wev_);
 }
