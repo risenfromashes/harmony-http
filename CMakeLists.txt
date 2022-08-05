@@ -12,7 +12,7 @@ endif()
 add_subdirectory(third_party/readerwriterqueue)
 add_subdirectory(third_party/simdjson EXCLUDE_FROM_ALL)
 add_subdirectory(third_party/stduuid)
-add_subdirectory(third_party/memory)
+# add_subdirectory(third_party/memory)
 
 # don't include nghttp2 source
 # SET(ENABLE_STATIC_LIB TRUE)
@@ -65,7 +65,7 @@ target_link_libraries(harmony_http PRIVATE
   readerwriterqueue 
   simdjson
   stduuid
-  foonathan_memory
+  # foonathan_memory
   PostgreSQL::PostgreSQL 
   jemalloc
   nghttp2
