@@ -8,33 +8,22 @@
 
 namespace hm::db {
 
-QueryAwaitable::QueryAwaitable(Stream *stream, const char *command)
-    : stream(stream) {
-  arg = QueryArg{.command = command};
+QueryAwaitable::QueryAwaitable(Stream *stream, const char *command) {
+  auto db = stream->get_db_session();
+  db->send_query(stream, command, this);
 }
 
 QueryAwaitable::QueryAwaitable(Stream *stream, const char *command,
-                               std::initializer_list<std::string> params)
-    : stream(stream) {
-  arg = QueryParamArg{.command = command};
-  auto &params_ = std::get<QueryParamArg>(arg).param_vector;
+                               std::initializer_list<std::string> params) {
+  auto db = stream->get_db_session();
+  std::vector<std::string> params_;
+  params_.reserve(params.size());
   std::move(params.begin(), params.end(), std::back_inserter(params_));
+  db->send_query_params(stream, command, std::move(params_), this);
 }
 
 void QueryAwaitable::await_suspend(handle_type handle) {
   this->handle = handle;
-
-  auto db = stream->get_db_session();
-  if (std::holds_alternative<QueryArg>(arg)) {
-
-    auto &q = std::get<QueryArg>(arg);
-    db->send_query(stream, q.command, this);
-
-  } else if (std::holds_alternative<QueryParamArg>(arg)) {
-
-    auto &q = std::get<QueryParamArg>(arg);
-    db->send_query_params(stream, q.command, std::move(q.param_vector), this);
-  }
 }
 
 Result QueryAwaitable::await_resume() { return result; }

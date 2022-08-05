@@ -18,15 +18,15 @@ class Session;
 struct QueryAwaitable : public Awaitable<> {
   using base = Awaitable<>;
 
-  Stream *stream;
-  std::variant<QueryArg, QueryParamArg, PrepareArg, QueryPreparedArg> arg;
-
   handle_type handle;
   void *result;
 
   void await_suspend(handle_type handle);
   Result await_resume();
   void resume(void *result);
+
+  QueryAwaitable(const QueryAwaitable &) = delete;
+  QueryAwaitable &operator=(const QueryAwaitable &) = delete;
 
   QueryAwaitable(Stream *stream, const char *command);
   QueryAwaitable(Stream *stream, const char *command,

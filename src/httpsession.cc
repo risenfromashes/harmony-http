@@ -488,9 +488,7 @@ int HttpSession::on_frame_recv_cb(nghttp2_session *session,
       stream->stop_read_timeout();
 
       // TODO: Handle POST/PUT: ON_DATA_END
-      if (stream->request_.on_body_cb_) {
-        std::invoke(stream->request_.on_body_cb_, stream->request_.body_);
-      }
+      stream->request_.handle_body();
     } else {
       stream->reset_read_timeout();
     }
@@ -648,13 +646,8 @@ int HttpSession::on_data_chunk_recv_cb(nghttp2_session *session, uint8_t flags,
   // TODO: Handle post
 
   // add response to request body for now
-  if (stream->request_.on_data_cb_) {
-    stream->request_.on_data_cb_(
-        std::string_view(reinterpret_cast<const char *>(data), len));
-  } else {
-    stream->request_.body_ +=
-        std::string_view(reinterpret_cast<const char *>(data), len);
-  }
+  stream->request_.handle_data(
+      std::string_view(reinterpret_cast<const char *>(data), len));
 
   stream->reset_read_timeout();
   return 0;

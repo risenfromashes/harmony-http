@@ -17,22 +17,38 @@ class HttpRequest {
   friend class HttpSession;
   friend class HttpRouter;
 
+  struct DataAwaitable : public Awaitable<> {
+    handle_type handle;
+    std::string_view str;
+    void await_suspend(handle_type handle) { this->handle = handle; }
+    std::string_view await_resume() { return str; }
+    void resume(std::string_view str) { this->str = str, handle.resume(); }
+    DataAwaitable(HttpRequest *request, bool body) {
+      if (body) {
+        request->body_awaitable_ = this;
+      } else {
+        request->data_awaitable_ = this;
+      }
+    }
+  };
+
   std::optional<std::string_view> get_header(std::string_view header_name);
   std::string_view path();
   std::string_view query();
 
-  HttpRequest &on_body(std::function<void(const std::string &)> &&cb) {
-    on_body_cb_ = std::move(cb);
-    return *this;
-  }
+  HttpRequest &on_body(std::function<void(const std::string &)> &&cb);
+  DataAwaitable body();
 
-  HttpRequest &on_data(std::function<void(std::string_view)> &&cb) {
-    on_data_cb_ = std::move(cb);
-    return *this;
-  }
+  HttpRequest &on_data(std::function<void(std::string_view)> &&cb);
+  DataAwaitable data();
 
   constexpr std::optional<std::string_view>
   get_param(std::string_view label) const;
+
+private:
+  void add_to_body(std::string_view str);
+  void handle_data(std::string_view str);
+  void handle_body();
 
 private:
   HttpRequest(Stream *stream);
@@ -44,6 +60,9 @@ private:
   std::string body_;
   std::function<void(const std::string &body)> on_body_cb_;
   std::function<void(std::string_view)> on_data_cb_;
+
+  DataAwaitable *body_awaitable_, *data_awaitable_;
+  bool data_chunk_mode_;
 };
 
 constexpr std::optional<std::string_view>
