@@ -7,14 +7,13 @@
 // basic coroutine resumable task
 namespace hm {
 
-template <class T = void> struct Promise;
-template <class T = void> struct Awaitable;
-
 template <class T = void> class Task {
 public:
-  using promise_type = Promise<T>;
+  struct PromiseBase;
+  struct Promise;
 
-  using handle_type = std::coroutine_handle<promise_type>;
+  using promise_type = Promise;
+  using handle_type = std::coroutine_handle<Promise>;
 
   // empty task
   Task() : handle_(nullptr) {}
@@ -36,24 +35,16 @@ public:
   operator bool() { return handle_; }
 
   void resume() {
-    if (handle_ && !handle_.done()) {
-      handle_.resume();
-    }
+    assert(handle_ && !handle_.done());
+    handle_.resume();
   }
+
+  bool done() { handle_.done(); }
 
   void
-  set_result(std::convertible_to<T> auto &&v) requires(!std::same_as<T, void>) {
-    if (handle_ && !handle_.done()) {
-      handle_.promise().set_value(std::forward<decltype(v)>(v));
-    }
-  }
+  set_result(std::convertible_to<T> auto &&v) requires(!std::same_as<T, void>);
 
-  std::optional<T> get_result() requires(!std::same_as<T, void>) {
-    if (handle_ && handle_.done()) {
-      return handle_.promise().value_;
-    }
-    return std::nullopt;
-  }
+  T get_result() requires(!std::same_as<T, void>);
 
   ~Task() {
     if (handle_) {
@@ -61,94 +52,45 @@ public:
     }
   }
 
-  auto operator co_await();
-
 private:
   handle_type handle_;
 };
 
-template <class T> struct Promise {
-  using handle_type = std::coroutine_handle<Promise<T>>;
-
-  T value_;
-
-  auto initial_suspend() noexcept {
-    // not lazy start immediately
-    return std::suspend_never{};
-  }
-
-  auto final_suspend() noexcept {
-    // always suspend let destructor of task destroy coroutine
-    return std::suspend_always{};
-  }
+template <class T> struct Task<T>::PromiseBase {
+  auto initial_suspend() noexcept { return std::suspend_never{}; }
+  // always suspend; let destructor destroy coroutine
+  auto final_suspend() noexcept { return std::suspend_always{}; }
 
   void unhandled_exception() {}
 
   Task<T> get_return_object() {
-    // return task to caller
-    return handle_type::from_promise(*this);
+    return handle_type::from_promise(*(static_cast<Promise *>(this)));
   }
 
   Task<T> get_task() { return get_return_object(); }
-
-  void set_value(std::convertible_to<T> auto &&v) {
-    value_ = std::forward<decltype(v)>(v);
-  }
-
-  void return_value(std::convertible_to<T> auto &&v) {
-    set_value(std::forward<decltype(v)>(v));
-  }
 };
 
-template <> struct Promise<void> {
-  using handle_type = std::coroutine_handle<Promise<>>;
-
-  auto initial_suspend() noexcept {
-    // not lazy start immediately
-    return std::suspend_never{};
+template <class T> struct Task<T>::Promise : public PromiseBase {
+  void return_value(std::convertible_to<T> auto &&v) {
+    value = std::forward<decltype(v)>(v);
   }
+  T value;
+};
 
-  auto final_suspend() noexcept {
-    // always suspend let destructor of task destroy coroutine
-    return std::suspend_always{};
-  }
-
-  void unhandled_exception() {}
-
-  Task<> get_return_object() {
-    // return task to caller
-    return handle_type::from_promise(*this);
-  }
-
-  Task<> get_task() { return get_return_object(); }
-
+template <> struct Task<void>::Promise : public PromiseBase {
   void return_void() {}
 };
 
-template <class T> struct Awaitable {
-  using promise_type = Promise<T>;
-  using handle_type = std::coroutine_handle<Promise<T>>;
+template <class T>
+void Task<T>::set_result(std::convertible_to<T> auto &&v) requires(
+    !std::same_as<T, void>) {
+  assert(handle_ && !handle_.done());
+  handle_.promise().value = std::forward<decltype(v)>(v);
+}
 
-  promise_type *promise_;
-
-  bool await_ready() { return false; }
-
-  void await_suspend(handle_type handle) { promise_ = &handle.promise(); }
-
-  T await_resume() { return promise_->value_; }
-};
-
-template <> struct Awaitable<void> {
-  using promise_type = Promise<>;
-  using handle_type = std::coroutine_handle<Promise<>>;
-
-  bool await_ready() { return false; }
-
-  void await_suspend(handle_type handle) {}
-
-  void await_resume() {}
-};
-
-template <class T> auto Task<T>::operator co_await() { return Awaitable(); }
+template <class T> T Task<T>::get_result() requires(!std::same_as<T, void>) {
+  assert(handle_ && handle_.done());
+  return handle_.promise().value;
+}
 
 } // namespace hm
