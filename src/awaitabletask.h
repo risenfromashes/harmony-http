@@ -23,7 +23,9 @@ public:
     other.handle_ = nullptr;
   }
   AwaitableTask &operator=(AwaitableTask &&other) {
-    handle_.destroy();
+    if (handle_) {
+      handle_.destroy();
+    }
     handle_ = other.handle_;
     other.handle_ = nullptr;
   }
@@ -50,7 +52,7 @@ public:
   void
   set_result(std::convertible_to<T> auto &&v) requires(!std::same_as<T, void>) {
     assert(handle_ && !handle_.done());
-    handle_.promise().set_value(std::forward<decltype(v)>(v));
+    handle_.promise().return_value(std::forward<decltype(v)>(v));
   }
 
   auto operator co_await() &&;
@@ -85,10 +87,9 @@ template <class T> struct AwaitableTask<T>::PromiseBase {
 
 template <class T> struct AwaitableTask<T>::Promise : public PromiseBase {
   void return_value(std::convertible_to<T> auto &&v) {
-    std::cout << "return value" << std::endl;
     value = std::forward<decltype(v)>(v);
   }
-  T value;
+  std::optional<T> value;
 };
 
 template <> struct AwaitableTask<void>::Promise : public PromiseBase {
@@ -104,11 +105,16 @@ template <class T> struct AwaitableTask<T>::Awaitable {
 
   T await_resume() {
     if constexpr (!std::same_as<T, void>) {
-      return task.promise().value;
+      assert(task.promise().value.has_value());
+      return std::move(task.promise().value.value());
     }
   }
 
+  Awaitable(const Awaitable &) = delete;
+  Awaitable &operator=(const Awaitable &) = delete;
+
   Awaitable(AwaitableTask<T> &&t) : task(std::move(t)) {}
+  ~Awaitable() {}
 
   AwaitableTask<T> task;
 };

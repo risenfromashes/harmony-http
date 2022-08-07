@@ -23,7 +23,10 @@ inline auto this_coro() {
     using handle_type = std::coroutine_handle<>;
     handle_type handle_;
     bool await_ready() { return false; }
-    auto await_suspend(handle_type handle) { return handle_ = handle; }
+    void await_suspend(handle_type handle) {
+      handle_ = handle;
+      handle.resume();
+    }
     handle_type await_resume() { return handle_; }
   } aw;
   return aw;

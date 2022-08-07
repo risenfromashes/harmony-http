@@ -8,15 +8,13 @@
 #include <variant>
 #include <vector>
 
-#include "task.h"
+#include "awaitabletask.h"
 
 namespace hm {
 class Stream;
 }
 
 namespace hm::db {
-
-struct QueryAwaitable;
 
 struct QueryArg {
   const char *command;
@@ -42,14 +40,14 @@ struct Query {
   const uint64_t stream_serial;
   bool is_sync_point;
   std::variant<QueryArg, QueryParamArg, PrepareArg, QueryPreparedArg> arg;
-  std::variant<QueryAwaitable *, std::function<void(Result)>>
+  std::variant<std::coroutine_handle<>, std::function<void(Result)>>
       completion_handler;
 };
 
 struct DispatchedQuery {
   const uint64_t stream_serial;
   bool is_sync_point;
-  std::variant<QueryAwaitable *, std::function<void(Result)>>
+  std::variant<std::coroutine_handle<>, std::function<void(Result)>>
       completion_handler;
 };
 

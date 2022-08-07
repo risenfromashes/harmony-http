@@ -11,6 +11,7 @@ class Result {
 public:
   enum class Status { ERROR, EMPTY, SINGLE, MANY };
 
+  class Iterator;
   class Row {
     friend class Result;
     friend class Iterator;
@@ -31,6 +32,8 @@ public:
       return get(name);
     }
 
+    friend bool operator==(const Iterator &a, const Iterator &b);
+
   private:
     Row(int row, Result *result) : row_index_(row), result_(result) {}
 
@@ -41,6 +44,7 @@ public:
   class Iterator {
     friend class Result;
 
+  public:
     Iterator &operator+(int n) {
       row_.row_index_ = std::min(row_.row_index_ + n, row_.result_->n_rows_);
       return *this;

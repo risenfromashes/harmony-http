@@ -1,37 +1,14 @@
 
 #include "dbconnection.h"
+#include "coro.h"
 #include "stream.h"
 
 #include <algorithm>
+#include <coroutine>
 #include <ev.h>
 #include <string>
 
 namespace hm::db {
-
-QueryAwaitable::QueryAwaitable(Stream *stream, const char *command) {
-  auto db = stream->get_db_session();
-  db->send_query(stream, command, this);
-}
-
-QueryAwaitable::QueryAwaitable(Stream *stream, const char *command,
-                               std::initializer_list<std::string> params) {
-  auto db = stream->get_db_session();
-  std::vector<std::string> params_;
-  params_.reserve(params.size());
-  std::move(params.begin(), params.end(), std::back_inserter(params_));
-  db->send_query_params(stream, command, std::move(params_), this);
-}
-
-void QueryAwaitable::await_suspend(handle_type handle) {
-  this->handle = handle;
-}
-
-Result QueryAwaitable::await_resume() { return result; }
-
-void QueryAwaitable::resume(void *result) {
-  this->result = result;
-  handle.resume();
-}
 
 Connection::Connection(Stream *stream) : stream_(stream) {}
 
@@ -41,8 +18,9 @@ void Connection::query(const char *command, std::function<void(Result)> &&cb) {
   db->send_query(stream_, command, std::move(cb));
 }
 
-QueryAwaitable Connection::query(const char *command) {
-  return QueryAwaitable(stream_, command);
+AwaitableTask<Result> Connection::query(const char *command) {
+  auto db = stream_->get_db_session();
+  db->send_query(stream_, command, co_await this_coro());
 }
 
 void Connection::query_params(const char *command,
@@ -54,9 +32,15 @@ void Connection::query_params(const char *command,
   db->send_query_params(stream_, command, std::move(param_vec), std::move(cb));
 }
 
-QueryAwaitable
+AwaitableTask<Result>
 Connection::query_params(const char *command,
                          std::initializer_list<std::string> params) {
-  return QueryAwaitable(stream_, command, params);
+  auto db = stream_->get_db_session();
+  std::vector<std::string> params_;
+  params_.reserve(params.size());
+  std::move(params.begin(), params.end(), std::back_inserter(params_));
+  db->send_query_params(stream_, command, std::move(params_),
+                        co_await this_coro());
+  co_await std::suspend_always{};
 }
 } // namespace hm::db

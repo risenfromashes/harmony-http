@@ -1,11 +1,11 @@
 #include "httprequest.h"
+#include "coro.h"
 #include "stream.h"
 
 namespace hm {
 
 HttpRequest::HttpRequest(Stream *stream)
-    : stream_(stream), body_awaitable_(nullptr), data_awaitable_(nullptr),
-      data_chunk_mode_(false) {}
+    : stream_(stream), data_chunk_mode_(false) {}
 
 std::optional<std::string_view>
 HttpRequest::get_header(std::string_view header_name) {
@@ -29,21 +29,27 @@ HttpRequest &HttpRequest::on_data(std::function<void(std::string_view)> &&cb) {
   return *this;
 }
 
-HttpRequest::DataAwaitable HttpRequest::body() {
+AwaitableTask<std::string_view> HttpRequest::body() {
   data_chunk_mode_ = false;
-  return DataAwaitable(this, true);
+  body_coro_ = coro_handle::from_address((co_await this_coro()).address());
+  co_await std::suspend_always{};
+  co_return body_;
 }
 
-HttpRequest::DataAwaitable HttpRequest::data() {
+AwaitableTask<std::string_view> HttpRequest::data() {
   data_chunk_mode_ = true;
-  return DataAwaitable(this, false);
+  data_coro_ = coro_handle::from_address((co_await this_coro()).address());
+  co_await std::suspend_always{};
+  co_return body_;
 }
+
 void HttpRequest::add_to_body(std::string_view str) { body_ += str; }
 
 void HttpRequest::handle_data(std::string_view str) {
   if (data_chunk_mode_) {
-    if (data_awaitable_) {
-      data_awaitable_->resume(str);
+    if (data_coro_) {
+      body_ = str;
+      data_coro_.resume();
     } else if (on_data_cb_) {
       on_data_cb_(body_);
     }
@@ -53,8 +59,8 @@ void HttpRequest::handle_data(std::string_view str) {
 }
 
 void HttpRequest::handle_body() {
-  if (body_awaitable_) {
-    body_awaitable_->resume(body_);
+  if (body_coro_) {
+    body_coro_.resume();
   } else if (on_body_cb_) {
     on_body_cb_(body_);
   }

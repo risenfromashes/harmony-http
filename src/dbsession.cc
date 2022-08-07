@@ -1,6 +1,7 @@
 #include <iterator>
 #include <postgresql/libpq-fe.h>
 
+#include "awaitabletask.h"
 #include "dbquery.h"
 #include "dbresult.h"
 #include "dbsession.h"
@@ -173,9 +174,13 @@ static void handle_result(DispatchedQuery &query, PGresult *result,
                           bool alive) {
   if (alive) {
     auto &handler = query.completion_handler;
-    if (std::holds_alternative<QueryAwaitable *>(handler)) {
-      auto q = std::get<QueryAwaitable *>(handler);
-      q->resume(result);
+    if (std::holds_alternative<std::coroutine_handle<>>(handler)) {
+      auto c = std::get<std::coroutine_handle<>>(handler);
+      auto coro =
+          std::coroutine_handle<AwaitableTask<Result>::Promise>::from_address(
+              c.address());
+      coro.promise().value = Result(result);
+      coro.resume();
     } else {
       auto &t = std::get<std::function<void(Result)>>(handler);
       t(result);
@@ -311,11 +316,11 @@ int Session::write() {
 }
 
 void Session::send_query(Stream *stream, const char *command,
-                         QueryAwaitable *q) {
+                         std::coroutine_handle<> coro) {
   queued_.emplace_back(db::Query{.stream_serial = stream->serial(),
                                  .is_sync_point = true,
                                  .arg = db::QueryArg{.command = command},
-                                 .completion_handler = q});
+                                 .completion_handler = coro});
   // sending query start writing
   ev_io_start(loop_, &wev_);
 }
@@ -332,13 +337,13 @@ void Session::send_query(Stream *stream, const char *command,
 
 void Session::send_query_params(Stream *stream, const char *command,
                                 std::vector<std::string> &&vec,
-                                QueryAwaitable *q) {
+                                std::coroutine_handle<> coro) {
   auto &query = queued_.emplace_back(
       db::Query{.stream_serial = stream->serial(),
                 .is_sync_point = true,
                 .arg = db::QueryParamArg{.command = command,
                                          .param_vector = std::move(vec)},
-                .completion_handler = q});
+                .completion_handler = coro});
   // sending query start writing
   ev_io_start(loop_, &wev_);
 }

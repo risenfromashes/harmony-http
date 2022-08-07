@@ -30,12 +30,14 @@ public:
 
   bool connected() { return connected_; }
 
-  void send_query(Stream *stream, const char *command, QueryAwaitable *q);
+  void send_query(Stream *stream, const char *command,
+                  std::coroutine_handle<> coro);
   void send_query(Stream *stream, const char *command,
                   std::function<void(Result)> &&cb);
 
   void send_query_params(Stream *stream, const char *command,
-                         std::vector<std::string> &&params, QueryAwaitable *q);
+                         std::vector<std::string> &&params,
+                         std::coroutine_handle<> coro);
   void send_query_params(Stream *stream, const char *command,
                          std::vector<std::string> &&params,
                          std::function<void(Result)> &&cb);

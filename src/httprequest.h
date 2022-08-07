@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 
+#include "awaitabletask.h"
 #include "httprouter.h"
 
 // part of public api
@@ -17,30 +18,18 @@ class HttpRequest {
   friend class HttpSession;
   friend class HttpRouter;
 
-  struct DataAwaitable : public Awaitable<> {
-    handle_type handle;
-    std::string_view str;
-    void await_suspend(handle_type handle) { this->handle = handle; }
-    std::string_view await_resume() { return str; }
-    void resume(std::string_view str) { this->str = str, handle.resume(); }
-    DataAwaitable(HttpRequest *request, bool body) {
-      if (body) {
-        request->body_awaitable_ = this;
-      } else {
-        request->data_awaitable_ = this;
-      }
-    }
-  };
+  using coro_handle =
+      std::coroutine_handle<AwaitableTask<std::string_view>::Promise>;
 
   std::optional<std::string_view> get_header(std::string_view header_name);
   std::string_view path();
   std::string_view query();
 
   HttpRequest &on_body(std::function<void(const std::string &)> &&cb);
-  DataAwaitable body();
+  AwaitableTask<std::string_view> body();
 
   HttpRequest &on_data(std::function<void(std::string_view)> &&cb);
-  DataAwaitable data();
+  AwaitableTask<std::string_view> data();
 
   constexpr std::optional<std::string_view>
   get_param(std::string_view label) const;
@@ -61,7 +50,7 @@ private:
   std::function<void(const std::string &body)> on_body_cb_;
   std::function<void(std::string_view)> on_data_cb_;
 
-  DataAwaitable *body_awaitable_, *data_awaitable_;
+  coro_handle body_coro_, data_coro_;
   bool data_chunk_mode_;
 };
 

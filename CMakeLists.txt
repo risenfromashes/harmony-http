@@ -24,66 +24,66 @@ find_package(Threads REQUIRED)
 find_package(PostgreSQL REQUIRED)
 
 
-# add_library(
-#   harmony_http STATIC
-#   src/server.h
-#   src/server.cc
-#   src/worker.h
-#   src/worker.cc
-#   src/dbsession.h
-#   src/dbsession.cc
-#   src/dbquery.h
-#   src/dbresult.h
-#   src/dbresult.cc
-#   src/dbconnection.h
-#   src/dbconnection.cc
-#   src/httprouter.h
-#   src/httprouter.cc
-#   src/httprequest.h
-#   src/httprequest.cc
-#   src/httpresponse.h
-#   src/httpresponse.cc
-#   src/httpsession.h
-#   src/httpsession.cc
-#   src/stream.h
-#   src/stream.cc
-#   src/datastream.h
-#   src/filestream.h
-#   src/filestream.cc
-#   src/stringstream.h
-#   src/stringstream.cc
-#   src/buffer.h
-#   src/uuidgenerator.h
-#   src/task.h
-#   src/awaitabletask.h
-#   src/coro.h
-#   src/util.h
-#   src/util.cc
-# )
+add_library(
+  harmony_http STATIC
+  src/server.h
+  src/server.cc
+  src/worker.h
+  src/worker.cc
+  src/dbsession.h
+  src/dbsession.cc
+  src/dbquery.h
+  src/dbresult.h
+  src/dbresult.cc
+  src/dbconnection.h
+  src/dbconnection.cc
+  src/httprouter.h
+  src/httprouter.cc
+  src/httprequest.h
+  src/httprequest.cc
+  src/httpresponse.h
+  src/httpresponse.cc
+  src/httpsession.h
+  src/httpsession.cc
+  src/stream.h
+  src/stream.cc
+  src/datastream.h
+  src/filestream.h
+  src/filestream.cc
+  src/stringstream.h
+  src/stringstream.cc
+  src/buffer.h
+  src/uuidgenerator.h
+  src/task.h
+  src/awaitabletask.h
+  src/coro.h
+  src/util.h
+  src/util.cc
+)
 
 
-# target_link_libraries(harmony_http PRIVATE  
-#   -static-libgcc -static-libstdc++
-#   readerwriterqueue 
-#   simdjson
-#   stduuid
-#   # foonathan_memory
-#   PostgreSQL::PostgreSQL 
-#   jemalloc
-#   nghttp2
-#   ev 
-#   OpenSSL::SSL
-#   OpenSSL::Crypto
-#   Threads::Threads
-# )
+target_link_libraries(harmony_http PRIVATE 
+  -static-libgcc -static-libstdc++
+  readerwriterqueue
+  simdjson
+  stduuid
+  # foonathan_memory
+  PostgreSQL::PostgreSQL
+  jemalloc
+  nghttp2
+  ev
+  OpenSSL::SSL
+  OpenSSL::Crypto
+  Threads::Threads
+)
 
 
-# target_sources(harmony_http PUBLIC FILE_SET HEADERS
-#   BASE_DIRS include
-#   FILES include/harmony/http2.h 
-# )
+target_sources(harmony_http PUBLIC FILE_SET HEADERS
+  BASE_DIRS include
+  FILES include/harmony/http2.h
+)
 
-# install(TARGETS harmony_http FILE_SET HEADERS)
+install(TARGETS harmony_http FILE_SET HEADERS)
 
 add_executable(exp
   src/exp.cc

@@ -4,6 +4,8 @@
 #include <coroutine>
 #include <optional>
 
+#include <iostream>
+
 // basic coroutine resumable task
 namespace hm {
 
@@ -39,7 +41,7 @@ public:
     handle_.resume();
   }
 
-  bool done() { handle_.done(); }
+  bool done() { return handle_.done(); }
 
   void
   set_result(std::convertible_to<T> auto &&v) requires(!std::same_as<T, void>);
