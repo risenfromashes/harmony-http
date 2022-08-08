@@ -246,7 +246,7 @@ private:
   std::variant<std::monostate, StringStream, FileStream> data_stream_store_;
   DataStream *data_stream_ = nullptr;
 
-  Task<> task_;
+  Task<> coro_handler_;
 };
 
 } // namespace hm

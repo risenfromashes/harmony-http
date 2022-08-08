@@ -9,6 +9,8 @@
 
 namespace hm {
 
+struct keep_value {};
+
 template <class T> class AwaitableTask {
 public:
   struct PromiseBase;
@@ -89,6 +91,9 @@ template <class T> struct AwaitableTask<T>::Promise : public PromiseBase {
   void return_value(std::convertible_to<T> auto &&v) {
     value = std::forward<decltype(v)>(v);
   }
+  // keep existing value
+  void return_value(keep_value) {}
+
   std::optional<T> value;
 };
 

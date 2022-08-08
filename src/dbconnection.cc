@@ -1,5 +1,6 @@
 
 #include "dbconnection.h"
+#include "awaitabletask.h"
 #include "coro.h"
 #include "stream.h"
 
@@ -21,6 +22,8 @@ void Connection::query(const char *command, std::function<void(Result)> &&cb) {
 AwaitableTask<Result> Connection::query(const char *command) {
   auto db = stream_->get_db_session();
   db->send_query(stream_, command, co_await this_coro());
+  co_await std::suspend_always{};
+  co_return keep_value{};
 }
 
 void Connection::query_params(const char *command,
@@ -42,5 +45,6 @@ Connection::query_params(const char *command,
   db->send_query_params(stream_, command, std::move(params_),
                         co_await this_coro());
   co_await std::suspend_always{};
+  co_return keep_value{};
 }
 } // namespace hm::db

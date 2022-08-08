@@ -282,7 +282,6 @@ int Session::write() {
       std::cerr << PQerrorMessage(conn_) << std::endl;
       return -1;
     }
-
     int n = 20; // send queries in batches of 20
     while (!queued_.empty() && (n--)) {
       auto &query = queued_.front();
@@ -340,7 +339,7 @@ void Session::send_query_params(Stream *stream, const char *command,
                                 std::coroutine_handle<> coro) {
   auto &query = queued_.emplace_back(
       db::Query{.stream_serial = stream->serial(),
-                .is_sync_point = true,
+                .is_sync_point = false,
                 .arg = db::QueryParamArg{.command = command,
                                          .param_vector = std::move(vec)},
                 .completion_handler = coro});

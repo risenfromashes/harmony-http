@@ -203,7 +203,7 @@ bool HttpRouter::dispatch_route(HttpMethod method, std::string_view path,
     request->handler_index_ = index;
     if (std::holds_alternative<coro_func>(handlers_[index])) {
       auto &h = std::get<coro_func>(handlers_[index]);
-      request->stream_->task_ = std::invoke(h, request, response);
+      request->stream_->coro_handler_ = std::invoke(h, request, response);
     } else {
       auto &h = std::get<func>(handlers_[index]);
       std::invoke(h, request, response);

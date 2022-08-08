@@ -83,7 +83,11 @@ Result &Result::operator=(Result &&b) {
 
 std::string Result::to_json() { return util::to_json(pg_result); }
 
-Result::~Result() { PQclear(pg_result); }
+Result::~Result() {
+  if (pg_result_) {
+    PQclear(pg_result);
+  }
+}
 
 #undef pg_result
 
