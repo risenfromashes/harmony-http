@@ -26,6 +26,8 @@ struct RouteNodeData {
   std::string_view label;
 };
 
+std::string_view to_string(RouteNodeData::Type type);
+
 struct RouteNode;
 
 struct RouteNode {
@@ -51,6 +53,8 @@ struct RouteNode {
   /* returns handler index */
   std::size_t match(HttpMethod method, std::string_view path,
                     std::vector<std::string_view> &vars) const;
+
+  void debug_print() const;
 };
 
 class HttpRouter {
@@ -82,6 +86,8 @@ public:
                       HttpRequest *request, HttpResponse *response) const;
 
 private:
+  void debug_print() const;
+
   RouteNode root_;
   std::vector<std::variant<func, coro_func>> handlers_;
   std::vector<const char *> route_paths_;

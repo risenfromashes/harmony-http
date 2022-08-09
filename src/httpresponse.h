@@ -25,7 +25,7 @@ public:
   void send(std::string &&str);
   void send_html(std::string &&str);
   void send_json(std::string &&str);
-  void send_file(const char *path);
+  void send_file(const char *path = nullptr);
 
   void send_status_response(const char *status, std::string_view message);
 

@@ -34,7 +34,11 @@ void HttpResponse::send_json(std::string &&str) {
 }
 
 void HttpResponse::send_file(const char *path) {
-  stream_->submit_file_response(path);
+  if (path == nullptr) {
+    stream_->submit_file_response();
+  } else {
+    stream_->submit_file_response(path);
+  }
 }
 
 db::Connection HttpResponse::get_db_connection() { return stream_; }
