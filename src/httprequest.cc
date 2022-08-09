@@ -76,4 +76,12 @@ AwaitableTask<simdjson::ondemand::document> HttpRequest::json() {
   co_return parser->iterate(body_);
 }
 
+std::optional<std::string_view> HttpRequest::get_cookie(std::string_view key) {
+  auto cookies = get_header("cookie");
+  if (!cookies) {
+    return std::nullopt;
+  }
+  return util::get_cookie(cookies.value(), key);
+}
+
 }; // namespace hm

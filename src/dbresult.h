@@ -87,6 +87,8 @@ public:
 
   std::string to_json();
 
+  bool exists();
+
   // Error result
   Result(bool error, const char *message);
   Result(std::nullptr_t);

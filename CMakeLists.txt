@@ -15,8 +15,8 @@ add_subdirectory(third_party/stduuid)
 # add_subdirectory(third_party/memory)
 
 # don't include nghttp2 source
-# SET(ENABLE_STATIC_LIB TRUE)
-# add_subdirectory(third_party/nghttp2)
+SET(ENABLE_STATIC_LIB TRUE)
+add_subdirectory(third_party/nghttp2)
 
 # set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL REQUIRED)
@@ -59,10 +59,10 @@ add_library(
   src/json.h
   src/json.cc
   src/coro.h
-  src/common_util.h
-  src/common_util.cc
   src/util.h
   src/util.cc
+  src/common_util.h
+  src/common_util.cc
 )
 
 

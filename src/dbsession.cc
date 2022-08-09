@@ -202,6 +202,7 @@ static void handle_result(DispatchedQuery &query, Result &&result, bool alive,
   if (alive) {
     auto &handler = query.completion_handler;
     if (std::holds_alternative<std::coroutine_handle<>>(handler)) {
+
       auto c = std::get<std::coroutine_handle<>>(handler);
       auto coro =
           std::coroutine_handle<AwaitableTask<Result>::Promise>::from_address(
@@ -239,6 +240,7 @@ int Session::read() {
 
     // until there's a nullptr this query isn't finished
     while ((result = PQgetResult(conn_)) != nullptr) {
+
       switch (PQresultStatus(result)) {
       case PGRES_COMMAND_OK:
       case PGRES_TUPLES_OK:
@@ -314,7 +316,7 @@ int Session::write() {
       auto &query = queued_.front();
       int rv = send_query(query);
       if (rv == 0) {
-        std::cerr << "Submitting query faild" << std::endl;
+        std::cerr << "Submitting query failed" << std::endl;
         std::cerr << PQerrorMessage(conn_) << std::endl;
         return -1;
       }

@@ -19,7 +19,7 @@ class HttpResponse {
 public:
   void set_status(const char *status);
   void set_header(const char *name, const char *value);
-  void set_header(const char *name, std::string &&value);
+  void set_header(const char *name, std::string_view value);
   void set_header_nc(const char *name, std::string_view value);
 
   void send(std::string &&str);

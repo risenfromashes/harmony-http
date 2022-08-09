@@ -14,7 +14,7 @@ void HttpResponse::set_header(const char *name, const char *value) {
   stream_->response_headers.set_header(name, value);
 }
 
-void HttpResponse::set_header(const char *name, std::string &&value) {
+void HttpResponse::set_header(const char *name, std::string_view value) {
   stream_->response_headers.set_header(name, value);
 }
 void HttpResponse::set_header_nc(const char *name, std::string_view value) {

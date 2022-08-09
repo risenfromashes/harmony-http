@@ -39,6 +39,8 @@ public:
   constexpr std::optional<std::string_view>
   get_param(std::string_view label) const;
 
+  std::optional<std::string_view> get_cookie(std::string_view key);
+
 private:
   void add_to_body(std::string_view str);
   void handle_data(std::string_view str);

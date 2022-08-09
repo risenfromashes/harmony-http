@@ -3,3 +3,4 @@ build/
 .directory
 certs/
 !certs/dhparam.pem
+out/

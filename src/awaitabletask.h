@@ -102,7 +102,7 @@ template <> struct AwaitableTask<void>::Promise : public PromiseBase {
 };
 
 template <class T> struct AwaitableTask<T>::Awaitable {
-  bool await_ready() { return false; }
+  bool await_ready() { return task.done(); }
 
   void await_suspend(std::coroutine_handle<> handle) {
     task.promise().continuation = handle;

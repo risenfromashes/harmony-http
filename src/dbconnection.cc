@@ -74,6 +74,7 @@ void Connection::query_prepared(const char *statement,
 AwaitableTask<Result>
 Connection::query_prepared(const char *statement,
                            std::vector<std::string> &&params_) {
+  std::cout << "query prepared" << std::endl;
   auto params = std::move(params_);
   auto db = stream_->get_db_session();
   if (!db->check_prepared_query(statement)) {
@@ -82,11 +83,18 @@ Connection::query_prepared(const char *statement,
       co_return Result(true, "Couldn't find query file");
     }
 
+    std::cout << "fould file" << std::endl;
+
     auto res = co_await prepare(statement, fd);
+
+    std::cout << "sent prepare query" << std::endl;
+
     if (res.is_error()) {
       co_return res;
     }
   }
+
+  std::cout << "sending query prepared" << std::endl;
 
   db->send_query_prepared(stream_, statement, std::move(params),
                           co_await this_coro());

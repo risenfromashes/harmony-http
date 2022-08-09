@@ -247,6 +247,8 @@ private:
   DataStream *data_stream_ = nullptr;
 
   Task<> coro_handler_;
+
+  bool prepared_response_ = false;
 };
 
 } // namespace hm

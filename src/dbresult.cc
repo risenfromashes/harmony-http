@@ -71,8 +71,8 @@ Result::Result(void *pgres) : pg_result_(pgres), error_message_(nullptr) {
     break;
   }
   if (!is_error()) {
-    n_cols_ = PQntuples(pg_result);
-    n_rows_ = PQnfields(pg_result);
+    n_rows_ = PQntuples(pg_result);
+    n_cols_ = PQnfields(pg_result);
   }
 }
 
@@ -113,6 +113,8 @@ Result::~Result() {
 Result::Result(bool error, const char *message) : error_message_(message) {
   status_ = Status::ERROR;
 }
+
+bool Result::exists() { return !is_error() && num_rows() > 0; }
 
 #undef pg_result
 

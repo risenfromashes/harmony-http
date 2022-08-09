@@ -444,6 +444,10 @@ int HttpSession::on_header_cb(nghttp2_session *session,
   stream->headers.buffer_size += (namebuf.len + valuebuf.len);
   stream->headers.add_header(name, value);
 
+  // std::cout << std::string_view{(char *)namebuf.base, namebuf.len} << ":"
+  //           << std::string_view{(char *)valuebuf.base, valuebuf.len}
+  //           << std::endl;
+
   return 0;
 }
 
@@ -484,6 +488,14 @@ int HttpSession::on_frame_recv_cb(nghttp2_session *session,
       return 0;
     }
 
+    // data frames surely come after header frames
+    if (!stream->prepared_response_) {
+      stream->parse_path();
+      auto method = stream->headers.method;
+      stream->prepare_response();
+      stream->prepared_response_ = true;
+    }
+
     if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
       stream->stop_read_timeout();
 
@@ -506,15 +518,17 @@ int HttpSession::on_frame_recv_cb(nghttp2_session *session,
         stream->submit_non_final_response("100");
       }
 
-      // Actual HTTP request headers received
-      stream->parse_path();
-      auto method = stream->headers.method;
-
       // TODO: Handle POST/PUT: ON_DATA_START
-      stream->prepare_response();
+      // Actual HTTP request headers received
     }
 
     if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+      if (!stream->prepared_response_) {
+        stream->parse_path();
+        auto method = stream->headers.method;
+        stream->prepare_response();
+        stream->prepared_response_ = true;
+      }
       stream->stop_read_timeout();
     } else {
       stream->reset_read_timeout();
