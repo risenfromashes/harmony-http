@@ -7,6 +7,8 @@
 #include "awaitabletask.h"
 #include "httprouter.h"
 
+#include "simdjson.h"
+
 // part of public api
 namespace hm {
 
@@ -21,6 +23,7 @@ class HttpRequest {
   using coro_handle =
       std::coroutine_handle<AwaitableTask<std::string_view>::Promise>;
 
+public:
   std::optional<std::string_view> get_header(std::string_view header_name);
   std::string_view path();
   std::string_view query();
@@ -30,6 +33,8 @@ class HttpRequest {
 
   HttpRequest &on_data(std::function<void(std::string_view)> &&cb);
   AwaitableTask<std::string_view> data();
+
+  AwaitableTask<simdjson::ondemand::document> json();
 
   constexpr std::optional<std::string_view>
   get_param(std::string_view label) const;

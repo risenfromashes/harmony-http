@@ -1,3 +1,5 @@
+#include <cstring>
+#include <fcntl.h>
 #include <iterator>
 #include <postgresql/libpq-fe.h>
 
@@ -13,21 +15,31 @@
 
 namespace hm::db {
 
-Session::Session(Worker *worker, PGconn *conn)
+Session::Session(Worker *worker, PGconn *conn, const char *default_query_dir)
     : connected_(false), worker_(worker), loop_(worker->get_loop()),
-      conn_(conn) { // likely to change during connection
-  fd_ = -1;         // keep it unitialised
+      conn_(conn),
+      query_dir_(default_query_dir) { // likely to change during connection
+  fd_ = -1;                           // keep it unitialised
   ev_init(&rev_, read_cb);
   ev_init(&wev_, write_cb);
   rev_.data = this;
   wev_.data = this;
   read_fn_ = &Session::poll_connection;
   write_fn_ = &Session::poll_connection;
+  dir_fd_ = -1;
+  if (query_dir_) {
+    dir_fd_ = open(default_query_dir, O_RDONLY);
+    if (dir_fd_ < 0) {
+      std::cerr << "Query directory: [" << query_dir_ << "] not found."
+                << std::endl;
+    }
+  }
   poll_connection();
 }
 
 std::unique_ptr<Session> Session::create(Worker *worker,
-                                         const char *connection_str) {
+                                         const char *connection_str,
+                                         const char *query_dir) {
   PGconn *conn = PQconnectStart(connection_str);
   if (!conn) {
     std::cerr << "Failed to create PGconn struct" << std::endl;
@@ -40,13 +52,16 @@ std::unique_ptr<Session> Session::create(Worker *worker,
     PQfinish(conn);
     return nullptr;
   }
-  return std::unique_ptr<Session>(new Session(worker, conn));
+  return std::unique_ptr<Session>(new Session(worker, conn, query_dir));
 }
 
 Session::~Session() {
   PQfinish(conn_);
   ev_io_stop(loop_, &rev_);
   ev_io_stop(loop_, &wev_);
+  if (dir_fd_ >= 0) {
+    close(dir_fd_);
+  }
 }
 
 int Session::send_query(db::Query &query) {
@@ -71,8 +86,20 @@ int Session::send_query(db::Query &query) {
                            /* result in text format */ 0);
   } else if (std::holds_alternative<PrepareArg>(query.arg)) {
     auto &arg = std::get<PrepareArg>(query.arg);
-    rv = PQsendPrepare(conn_, arg.statement, arg.query, arg.n_params,
-                       /* param types implicit */ nullptr);
+    if (arg.file_fd >= 0) {
+      // read file
+      auto size = lseek(arg.file_fd, 0, SEEK_END);
+      char *buf = new char[size + 1];
+      pread(arg.file_fd, buf, size, 0);
+      buf[size] = '\0';
+      rv = PQsendPrepare(conn_, arg.statement, buf, 0,
+                         /* param types implicit */ nullptr);
+      delete[] buf;
+    } else {
+      assert(arg.query != nullptr);
+      rv = PQsendPrepare(conn_, arg.statement, arg.query, 0,
+                         /* param types implicit */ nullptr);
+    }
 
   } else if (std::holds_alternative<QueryPreparedArg>(query.arg)) {
     auto &arg = std::get<QueryPreparedArg>(query.arg);
@@ -170,8 +197,8 @@ int Session::connection_made() {
   return 0;
 }
 
-static void handle_result(DispatchedQuery &query, PGresult *result,
-                          bool alive) {
+static void handle_result(DispatchedQuery &query, Result &&result, bool alive,
+                          bool resume = true) {
   if (alive) {
     auto &handler = query.completion_handler;
     if (std::holds_alternative<std::coroutine_handle<>>(handler)) {
@@ -179,14 +206,14 @@ static void handle_result(DispatchedQuery &query, PGresult *result,
       auto coro =
           std::coroutine_handle<AwaitableTask<Result>::Promise>::from_address(
               c.address());
-      coro.promise().value = Result(result);
-      coro.resume();
+      coro.promise().value.emplace(std::move(result));
+      if (!c.done() && resume) {
+        coro.resume();
+      }
     } else {
       auto &t = std::get<std::function<void(Result)>>(handler);
-      t(result);
+      t(std::move(result));
     }
-  } else {
-    PQclear(result);
   }
 }
 
@@ -315,17 +342,7 @@ int Session::write() {
 }
 
 void Session::send_query(Stream *stream, const char *command,
-                         std::coroutine_handle<> coro) {
-  queued_.emplace_back(db::Query{.stream_serial = stream->serial(),
-                                 .is_sync_point = true,
-                                 .arg = db::QueryArg{.command = command},
-                                 .completion_handler = coro});
-  // sending query start writing
-  ev_io_start(loop_, &wev_);
-}
-
-void Session::send_query(Stream *stream, const char *command,
-                         std::function<void(Result)> &&cb) {
+                         completion_handler &&cb) {
   queued_.emplace_back(db::Query{.stream_serial = stream->serial(),
                                  .is_sync_point = true,
                                  .arg = db::QueryArg{.command = command},
@@ -336,19 +353,7 @@ void Session::send_query(Stream *stream, const char *command,
 
 void Session::send_query_params(Stream *stream, const char *command,
                                 std::vector<std::string> &&vec,
-                                std::coroutine_handle<> coro) {
-  auto &query = queued_.emplace_back(
-      db::Query{.stream_serial = stream->serial(),
-                .is_sync_point = false,
-                .arg = db::QueryParamArg{.command = command,
-                                         .param_vector = std::move(vec)},
-                .completion_handler = coro});
-  // sending query start writing
-  ev_io_start(loop_, &wev_);
-}
-void Session::send_query_params(Stream *stream, const char *command,
-                                std::vector<std::string> &&vec,
-                                std::function<void(Result)> &&cb) {
+                                completion_handler &&cb) {
   auto &query = queued_.emplace_back(
       db::Query{.stream_serial = stream->serial(),
                 .is_sync_point = true,
@@ -357,6 +362,81 @@ void Session::send_query_params(Stream *stream, const char *command,
                 .completion_handler = std::move(cb)});
   // sending query start writing
   ev_io_start(loop_, &wev_);
+}
+
+void Session::send_prepared(Stream *stream, const char *statement,
+                            const char *command, completion_handler &&cb) {
+  add_prepared_query(statement);
+  queued_.emplace_back(db::Query{.stream_serial = stream->serial(),
+                                 .is_sync_point = true,
+                                 .arg = db::PrepareArg{.statement = statement,
+                                                       .query = command,
+                                                       .file_fd = -1},
+                                 .completion_handler = std::move(cb)});
+  // sending query start writing
+  ev_io_start(loop_, &wev_);
+}
+
+void Session::send_prepared(Stream *stream, const char *statement, int file_fd,
+                            completion_handler &&cb) {
+  assert(file_fd >= 0);
+  add_prepared_query(statement);
+  queued_.emplace_back(db::Query{.stream_serial = stream->serial(),
+                                 .is_sync_point = true,
+                                 .arg = db::PrepareArg{.statement = statement,
+                                                       .query = nullptr,
+                                                       .file_fd = file_fd},
+                                 .completion_handler = std::move(cb)});
+  // sending query start writing
+  ev_io_start(loop_, &wev_);
+}
+
+void Session::send_query_prepared(Stream *stream, const char *statement,
+                                  std::vector<std::string> &&params,
+                                  completion_handler &&cb) {
+
+  queued_.emplace_back(
+      db::Query{.stream_serial = stream->serial(),
+                .is_sync_point = true,
+                .arg = db::QueryPreparedArg{.statement = statement,
+                                            .param_vector = std::move(params)},
+                .completion_handler = std::move(cb)});
+  // sending query start writing
+  ev_io_start(loop_, &wev_);
+}
+
+void Session::add_prepared_query(const char *statement) {
+  prepared_queries_.emplace(statement);
+}
+
+bool Session::check_prepared_query(const char *statement) {
+  return prepared_queries_.contains(statement);
+}
+
+int Session::open_query_file(const char *statement) {
+  char name_buf[64];
+  int file_fd;
+  assert(std::strlen(statement) + 4 < 64 && "File name too large");
+  std::strcpy(name_buf, statement);
+  std::strcat(name_buf, ".sql");
+  if (dir_fd_ >= 0) {
+    file_fd = openat(dir_fd_, name_buf, O_RDONLY);
+  } else {
+    file_fd = open(name_buf, O_RDONLY);
+  }
+  return file_fd;
+}
+
+void Session::set_query_location(const char *dir) {
+  query_dir_ = dir;
+  if (dir_fd_ >= 0) {
+    close(dir_fd_);
+    dir_fd_ = -1;
+  }
+  dir_fd_ = open(dir, O_RDONLY);
+  if (dir_fd_ < 0) {
+    std::cerr << "Query directory: [" << dir << "] not found." << std::endl;
+  }
 }
 
 } // namespace hm::db

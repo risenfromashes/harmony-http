@@ -308,6 +308,12 @@ void Server::connect_database(const char *connection_string) {
   }
 }
 
+void Server::set_query_location(const char *query_dir) {
+  for (int i = 0; i < config_.num_threads; i++) {
+    workers_[i]->set_query_dir(query_dir);
+  }
+}
+
 void Server::iterate_directory(std::string path) {
   DIR *dir;
   dirent *de;

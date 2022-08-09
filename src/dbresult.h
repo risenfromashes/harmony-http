@@ -80,12 +80,16 @@ public:
   std::optional<std::string_view> get(const char *name);
 
   Row operator[](int row);
+  std::optional<std::string_view> operator[](const char *name);
 
   bool is_error();
   std::string_view error_message();
 
   std::string to_json();
 
+  // Error result
+  Result(bool error, const char *message);
+  Result(std::nullptr_t);
   Result(void *pg_result);
   Result(Result &&b);
   Result &operator=(Result &&b);
@@ -95,10 +99,12 @@ public:
   ~Result();
 
 private:
+  void *pg_result_ = nullptr;
   Status status_;
-  void *pg_result_;
   int n_rows_;
   int n_cols_;
+
+  const char *error_message_;
 };
 
 }; // namespace hm::db

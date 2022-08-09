@@ -1,40 +1,26 @@
-#include <concepts>
-#include <coroutine>
-#include <cstdio>
-#include <iostream>
-#include <optional>
+#include "json.h"
 
-// basic coroutine resumable task
-#include "awaitabletask.h"
-#include "coro.h"
-#include "task.h"
+#include <iostream>
 
 using namespace hm;
-
-std::coroutine_handle<> coro;
-// inner task
-AwaitableTask<int> f1() {
-  std::cout << "entering f1()" << std::endl;
-  coro = co_await this_coro();
-  std::cout << "suspending coro" << std::endl;
-  std::cout << "coro: " << coro.address() << std::endl;
-  co_await std::suspend_always{};
-  std::cout << "f1() resumed" << std::endl;
-  co_return 69;
-}
-// outer task
-Task<> f() {
-  std::cout << "entering f()" << std::endl;
-  // co_await f1();
-  int x = co_await f1();
-  std::cout << "resumed f() " << std::endl;
-  std::cout << "fuck" << std::endl;
-  std::cout << x << std::endl;
-}
-
 int main() {
-  auto t = f();
-  std::cout << "in main: coro: " << coro.address() << " done: " << coro.done()
-            << " alive: " << bool(coro) << std::endl;
-  coro.resume();
+  json::Writer writer;
+  {
+    json::Object root = writer.root();
+    root["name"] = "siam";
+    root["type"] = "retard";
+    {
+      json::Array children = root["children"];
+      for (int i = 0; i < 10; i++) {
+        json::Object child = children.next_object();
+        child["index"] = i;
+        child["age"] = 50 - i;
+        child["name"] = "child" + std::to_string(i);
+        child["retarded"] = true;
+        child["child"] = nullptr;
+      }
+    }
+  }
+  std::cout << writer.string() << std::endl;
 }
+

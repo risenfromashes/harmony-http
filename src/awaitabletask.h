@@ -11,7 +11,7 @@ namespace hm {
 
 struct keep_value {};
 
-template <class T> class AwaitableTask {
+template <class T = void> class AwaitableTask {
 public:
   struct PromiseBase;
   struct Promise;

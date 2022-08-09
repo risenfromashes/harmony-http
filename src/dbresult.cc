@@ -5,6 +5,8 @@
 #include "dbresult.h"
 #include "util.h"
 
+#include <iostream>
+
 namespace hm::db {
 
 #define pg_result static_cast<PGresult *>(pg_result_)
@@ -37,14 +39,22 @@ std::optional<std::string_view> Result::get(const char *name) {
 
 Result::Row Result::operator[](int row) { return Row(row, this); }
 
+std::optional<std::string_view> Result::operator[](const char *name) {
+  return get(0, name);
+}
+
 bool Result::is_error() { return status_ == Result::Status::ERROR; }
 
 std::string_view Result::error_message() {
   assert(status_ == Status::ERROR);
-  return PQresultErrorMessage(pg_result);
+  if (error_message_) {
+    return error_message_;
+  } else {
+    return PQresultErrorMessage(pg_result);
+  }
 }
 
-Result::Result(void *pgres) : pg_result_(pgres) {
+Result::Result(void *pgres) : pg_result_(pgres), error_message_(nullptr) {
   auto status = PQresultStatus(pg_result);
   switch (status) {
   case PGRES_COMMAND_OK:
@@ -60,13 +70,22 @@ Result::Result(void *pgres) : pg_result_(pgres) {
     status_ = Status::ERROR;
     break;
   }
-  n_cols_ = PQntuples(pg_result);
-  n_rows_ = PQnfields(pg_result);
+  if (!is_error()) {
+    n_cols_ = PQntuples(pg_result);
+    n_rows_ = PQnfields(pg_result);
+  }
+}
+
+Result::Result(std::nullptr_t) : pg_result_(nullptr) {
+  status_ = Status::ERROR;
+  error_message_ = "Result class in unitialised state";
 }
 
 Result::Result(Result &&b) : pg_result_(b.pg_result_) {
+  status_ = b.status_;
   n_rows_ = b.n_rows_;
   n_cols_ = b.n_rows_;
+  error_message_ = b.error_message_;
   b.pg_result_ = nullptr;
 }
 
@@ -74,9 +93,11 @@ Result &Result::operator=(Result &&b) {
   if (pg_result_) {
     PQclear(pg_result);
   }
+  status_ = b.status_;
   pg_result_ = b.pg_result_;
   n_rows_ = b.n_rows_;
   n_cols_ = b.n_cols_;
+  error_message_ = b.error_message_;
   b.pg_result_ = nullptr;
   return *this;
 }
@@ -87,6 +108,10 @@ Result::~Result() {
   if (pg_result_) {
     PQclear(pg_result);
   }
+}
+
+Result::Result(bool error, const char *message) : error_message_(message) {
+  status_ = Status::ERROR;
 }
 
 #undef pg_result

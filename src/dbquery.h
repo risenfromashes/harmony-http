@@ -28,7 +28,7 @@ struct QueryParamArg {
 struct PrepareArg {
   const char *statement;
   const char *query;
-  int n_params;
+  int file_fd;
 };
 
 struct QueryPreparedArg {

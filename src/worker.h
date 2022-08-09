@@ -67,10 +67,20 @@ public:
 
   void start_db_session(const char *connect_string);
   void restart_db_session();
+
   db::Session *get_db_session() { return dbsession_.get(); }
+
   UUIDGenerator *get_uuid_generator() { return &uuid_generator_; }
+  simdjson::ondemand::parser *get_json_parser() { return &json_parser_; }
 
   bool is_stream_alive(uint64_t serial);
+
+  void set_query_dir(const char *dir) {
+    query_dir_ = dir;
+    if (dbsession_) {
+      dbsession_->set_query_location(dir);
+    }
+  }
 
 private:
   void add_stream(Stream *stream);
@@ -99,6 +109,8 @@ private:
   std::list<HttpSession> sessions_;
 
   const char *dbconnection_string_;
+  const char *query_dir_ = nullptr;
+
   std::unique_ptr<db::Session> dbsession_;
 
   nghttp2_session_callbacks *callbacks_;

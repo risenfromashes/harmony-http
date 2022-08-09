@@ -1,11 +1,14 @@
 #include "httprequest.h"
 #include "coro.h"
-#include "stream.h"
+#include "httpsession.h"
+#include "worker.h"
 
 namespace hm {
 
 HttpRequest::HttpRequest(Stream *stream)
-    : stream_(stream), data_chunk_mode_(false) {}
+    : stream_(stream), data_chunk_mode_(false) {
+  data_coro_ = body_coro_ = nullptr;
+}
 
 std::optional<std::string_view>
 HttpRequest::get_header(std::string_view header_name) {
@@ -64,6 +67,13 @@ void HttpRequest::handle_body() {
   } else if (on_body_cb_) {
     on_body_cb_(body_);
   }
+}
+
+AwaitableTask<simdjson::ondemand::document> HttpRequest::json() {
+  co_await body();
+  body_.reserve(body_.size() + simdjson::SIMDJSON_PADDING);
+  auto parser = Worker::get_worker()->get_json_parser();
+  co_return parser->iterate(body_);
 }
 
 }; // namespace hm

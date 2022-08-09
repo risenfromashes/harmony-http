@@ -39,4 +39,11 @@ void HttpResponse::send_file(const char *path) {
 
 db::Connection HttpResponse::get_db_connection() { return stream_; }
 
+void HttpResponse::send_status_response(const char *status,
+                                        std::string_view message) {
+  stream_->response_headers.status = status;
+  stream_->submit_html_response("<html> <h1>" + std::string(status) +
+                                "</h1> <p>" + std::string(message) +
+                                "</p> </html>");
+}
 } // namespace hm

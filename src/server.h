@@ -41,6 +41,7 @@ public:
   void serve_static_files(std::string path_to_dir);
 
   void connect_database(const char *connection_string);
+  void set_query_location(const char *query_dir);
 
   Server &get(const char *route,
               std::invocable<HttpRequest *, HttpResponse *> auto &&cb);

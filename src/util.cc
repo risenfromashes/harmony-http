@@ -638,9 +638,11 @@ std::string to_json(PGresult *res) {
     return "{}";
   default:
     // std::cerr << PQresultStatus(res) << std::endl;
+    // std::cerr << PQresultErrorMessage(res) << std::endl;
     assert(false && "to_json shouldn't be called with given result type");
     break;
   }
+  return "{}";
 }
 
 std::optional<std::string_view> get_cookie(std::string_view cookies,

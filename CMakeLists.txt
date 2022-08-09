@@ -56,7 +56,11 @@ add_library(
   src/uuidgenerator.h
   src/task.h
   src/awaitabletask.h
+  src/json.h
+  src/json.cc
   src/coro.h
+  src/common_util.h
+  src/common_util.cc
   src/util.h
   src/util.cc
 )
@@ -64,9 +68,6 @@ add_library(
 
 target_link_libraries(harmony_http PRIVATE 
   -static-libgcc -static-libstdc++
-  readerwriterqueue
-  simdjson
-  stduuid
   # foonathan_memory
   PostgreSQL::PostgreSQL
   jemalloc
@@ -77,6 +78,12 @@ target_link_libraries(harmony_http PRIVATE
   Threads::Threads
 )
 
+target_link_libraries(harmony_http PUBLIC 
+  readerwriterqueue
+  simdjson
+  stduuid
+)
+
 
 target_sources(harmony_http PUBLIC FILE_SET HEADERS
   BASE_DIRS include
@@ -85,12 +92,10 @@ target_sources(harmony_http PUBLIC FILE_SET HEADERS
 
 install(TARGETS harmony_http FILE_SET HEADERS)
 
-add_executable(exp
-  src/exp.cc
-  src/task.h
-  src/awaitabletask.h
-  src/coro.h
-)
+# add_executable(exp
+#   src/exp.cc
+#   src/json.h
+# )
 
 
 

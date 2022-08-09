@@ -1,4 +1,5 @@
 
+#include "../../src/json.h"
 
 #include "../../src/dbconnection.h"
 

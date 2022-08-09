@@ -7,6 +7,7 @@
 
 #include <deque>
 #include <memory>
+#include <unordered_set>
 
 #include "dbresult.h"
 #include "task.h"
@@ -19,11 +20,16 @@ namespace db {
 
 class Session {
 
-  Session(Worker *worker, PGconn *conn);
+  Session(Worker *worker, PGconn *conn,
+          const char *default_query_dir = nullptr);
+
+  using completion_handler =
+      std::variant<std::coroutine_handle<>, std::function<void(Result)>>;
 
 public:
   static std::unique_ptr<Session> create(Worker *worker,
-                                         const char *connection_str);
+                                         const char *connection_str,
+                                         const char *query_dir = nullptr);
   ~Session();
 
   int send_query(db::Query &query);
@@ -31,16 +37,27 @@ public:
   bool connected() { return connected_; }
 
   void send_query(Stream *stream, const char *command,
-                  std::coroutine_handle<> coro);
-  void send_query(Stream *stream, const char *command,
-                  std::function<void(Result)> &&cb);
+                  completion_handler &&coro);
+  void send_query_params(Stream *stream, const char *command,
+                         std::vector<std::string> &&params,
+                         completion_handler &&coro);
+  void send_prepared(Stream *stream, const char *statement, const char *command,
+                     completion_handler &&coro);
+  void send_prepared(Stream *stream, const char *statement, int file_fd,
+                     completion_handler &&coro);
 
-  void send_query_params(Stream *stream, const char *command,
-                         std::vector<std::string> &&params,
-                         std::coroutine_handle<> coro);
-  void send_query_params(Stream *stream, const char *command,
-                         std::vector<std::string> &&params,
-                         std::function<void(Result)> &&cb);
+  // returns true if query is actually sent
+  void send_query_prepared(Stream *stream, const char *statement,
+                           std::vector<std::string> &&params,
+                           completion_handler &&coro);
+
+  void add_prepared_query(const char *statement);
+
+  bool check_prepared_query(const char *statement);
+
+  void set_query_location(const char *dir);
+
+  int open_query_file(const char *statement);
 
 private:
   static void read_cb(struct ev_loop *loop, ev_io *w, int revents);
@@ -68,6 +85,11 @@ private:
 
   std::deque<db::Query> queued_;
   std::deque<db::DispatchedQuery> dispatched_;
+
+  std::unordered_set<std::string_view> prepared_queries_;
+
+  const char *query_dir_;
+  int dir_fd_;
 };
 
 } // namespace db

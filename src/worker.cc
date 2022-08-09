@@ -190,7 +190,7 @@ struct ev_loop *Worker::get_loop() {
 
 void Worker::start_db_session(const char *connect_string) {
   dbconnection_string_ = connect_string;
-  dbsession_ = db::Session::create(this, connect_string);
+  dbsession_ = db::Session::create(this, connect_string, query_dir_);
   if (!dbsession_) {
     std::cerr << "Failed to start db session. Worker exiting." << std::endl;
     cancel();
