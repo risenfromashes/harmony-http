@@ -15,8 +15,8 @@ add_subdirectory(third_party/stduuid)
 # add_subdirectory(third_party/memory)
 
 # don't include nghttp2 source
-SET(ENABLE_STATIC_LIB TRUE)
-add_subdirectory(third_party/nghttp2)
+# SET(ENABLE_STATIC_LIB TRUE)
+# add_subdirectory(third_party/nghttp2)
 
 # set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL REQUIRED)

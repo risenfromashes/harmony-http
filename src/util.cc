@@ -710,7 +710,10 @@ void append_quoted_string(std::string_view sv, std::string &ret_) {
         u >>= 4;
         hex[4] = hexchars[u & 0xF];
         ret_ += hex;
+      } else {
+        ret_ += c;
       }
+      break;
     }
     }
   }
