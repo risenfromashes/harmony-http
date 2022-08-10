@@ -588,7 +588,9 @@ void jsonify_row(PGresult *res, int row, std::string &out) {
     ret += field;
     ret += "\"";
     ret += ":";
-    if (val == nullptr) {
+    if (PQgetisnull(res, i, j)) {
+      ret += "null";
+    } else if (val == nullptr) {
       ret += "null";
     } else if (type == BOOL) {
       ret += val[0] == 't' ? "true" : "false";
@@ -597,9 +599,7 @@ void jsonify_row(PGresult *res, int row, std::string &out) {
       ret += val;
     } else { // otherwise assume string type
       // escape literal
-      ret += "\"";
-      ret += val;
-      ret += "\"";
+      append_quoted_string(val, ret);
     }
 
     if (j < n_cols - 1) {
@@ -665,4 +665,56 @@ std::optional<std::string_view> get_cookie(std::string_view cookies,
   }
   return std::nullopt;
 }
+
+void append_quoted_string(std::string_view sv, std::string &ret_) {
+  if (!std::any_of(sv.begin(), sv.end(), [](char c) {
+        auto u = static_cast<unsigned char>(c);
+        return c == '\\' || c == '"' || u < 0x20;
+      })) {
+    ret_ += '\"';
+    ret_ += sv;
+    ret_ += '\"';
+    return;
+  }
+
+  ret_ += '\"';
+  for (char c : sv) {
+    switch (c) {
+    case '\"':
+      ret_ += "\\\"";
+      break;
+    case '\\':
+      ret_ += "\\\\";
+      break;
+    case '\b':
+      ret_ += "\\b";
+      break;
+    case '\f':
+      ret_ += "\\f";
+      break;
+    case '\n':
+      ret_ += "\\n";
+      break;
+    case '\r':
+      ret_ += "\\r";
+      break;
+    case '\t':
+      ret_ += "\\t";
+      break;
+    default: {
+      auto u = static_cast<unsigned char>(c);
+      if (u < 0x20) {
+        const char hexchars[] = "0123456789abcdef";
+        char hex[] = "\\u0000";
+        hex[5] = hexchars[u & 0xF];
+        u >>= 4;
+        hex[4] = hexchars[u & 0xF];
+        ret_ += hex;
+      }
+    }
+    }
+  }
+  ret_ += '\"';
+}
+
 } // namespace hm::util

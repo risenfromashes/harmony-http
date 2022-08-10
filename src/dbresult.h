@@ -89,6 +89,9 @@ public:
 
   bool exists();
 
+  operator bool() {
+    return !is_error() && (status_ == Status::EMPTY || n_rows_ > 0);
+  }
   // Error result
   Result(bool error, const char *message);
   Result(std::nullptr_t);

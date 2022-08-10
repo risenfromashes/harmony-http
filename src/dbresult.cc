@@ -46,12 +46,20 @@ std::optional<std::string_view> Result::operator[](const char *name) {
 bool Result::is_error() { return status_ == Result::Status::ERROR; }
 
 std::string_view Result::error_message() {
-  assert(status_ == Status::ERROR);
   if (error_message_) {
+    // non-database error
+    assert(status_ == Status::ERROR);
     return error_message_;
   } else {
-    return PQresultErrorMessage(pg_result);
+    if (status_ == Status::ERROR) {
+      return PQresultErrorMessage(pg_result);
+    } else {
+      if (status_ != Status::EMPTY && num_rows() == 0) {
+        return "No record matched query";
+      }
+    }
   }
+  return "Success";
 }
 
 Result::Result(void *pgres) : pg_result_(pgres), error_message_(nullptr) {

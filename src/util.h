@@ -281,4 +281,6 @@ std::string to_json(PGresult *result);
 std::optional<std::string_view> get_cookie(std::string_view cookies,
                                            std::string_view key);
 
+void append_quoted_string(std::string_view sv, std::string &ret_);
+
 } // namespace hm::util
