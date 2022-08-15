@@ -37,7 +37,7 @@ int EventStream::send(Stream *stream, size_t wlen) {
     to_write -= ext_pre;
   } else {
     // conditionally check upto what we wrote
-    while (pos_ < ext_pre) {
+    while (to_write && pos_ < ext_pre) {
       std::string_view s;
       if (pos_ < l1) {
         // write "event: "
@@ -58,7 +58,7 @@ int EventStream::send(Stream *stream, size_t wlen) {
     }
   }
 
-  auto s = ev.view().substr(pos_, to_write);
+  auto s = ev.view().substr(pos_ - ext_pre, to_write);
   wb->write_full(s);
   pos_ += s.length();
   to_write -= s.length();
