@@ -31,6 +31,8 @@
 
 #include <algorithm>
 #include <array>
+#include <string_view>
+
 namespace hm {
 // a thin wrapper around std::array based buffer
 template <size_t N> struct Buffer {
@@ -60,6 +62,11 @@ template <size_t N> struct Buffer {
     assert(count <= wleft());
     auto *p = static_cast<const uint8_t *>(src);
     last_ = std::copy_n(p, count, last_);
+  }
+
+  // makes sures there is space for |count| bytes and writes them
+  void write_full(std::string_view src) {
+    write_full(src.data(), src.length());
   }
 
   void write_byte(uint8_t byte) { *last_++ = byte; }

@@ -14,6 +14,7 @@
 #include <nghttp2/nghttp2.h>
 
 #include "dbsession.h"
+#include "eventdispatcher.h"
 #include "filestream.h"
 #include "server.h"
 #include "uuidgenerator.h"
@@ -37,9 +38,15 @@ public:
   ~Worker();
 
   static Worker *get_worker() {
-    if (workers_.contains(std::this_thread::get_id())) {
-      return workers_[std::this_thread::get_id()];
+    thread_local Worker *worker_ = nullptr;
+    if (worker_) {
+      return worker_;
     }
+
+    if (workers_.contains(std::this_thread::get_id())) {
+      return worker_ = workers_[std::this_thread::get_id()];
+    }
+
     return nullptr;
   }
 
@@ -55,9 +62,9 @@ public:
 
   void remove_session(HttpSession *session);
 
-  void remove_static_file(FileStream *file);
-  FileStream *get_static_file(const std::string_view &rel_path,
-                              bool prefer_compressed = true);
+  void remove_static_file(FileEntry *file);
+  FileEntry *get_static_file(const std::string_view &rel_path,
+                             bool prefer_compressed = true);
   std::string_view get_static_root();
 
   std::string_view get_cached_date();
@@ -71,7 +78,10 @@ public:
   db::Session *get_db_session() { return dbsession_.get(); }
 
   UUIDGenerator *get_uuid_generator() { return &uuid_generator_; }
+
   simdjson::ondemand::parser *get_json_parser() { return &json_parser_; }
+
+  EventDispatcher *get_event_dispatcher() { return &event_dispatcher_; }
 
   bool is_stream_alive(uint64_t serial);
 
@@ -86,7 +96,7 @@ private:
   void add_stream(Stream *stream);
   void remove_stream(Stream *stream);
 
-  FileStream *add_static_file(std::string path);
+  FileEntry *add_static_file(std::string path);
 
   static void async_acceptcb(struct ev_loop *loop, ev_async *watcher,
                              int revents);
@@ -116,7 +126,7 @@ private:
   nghttp2_session_callbacks *callbacks_;
   nghttp2_option *options_;
 
-  std::multimap<std::string_view, std::unique_ptr<FileStream>> files_;
+  std::multimap<std::string_view, std::unique_ptr<FileEntry>> files_;
 
   struct DateCache {
     char mem[29];
@@ -135,5 +145,7 @@ private:
 
   simdjson::ondemand::parser json_parser_;
   UUIDGenerator uuid_generator_;
+
+  EventDispatcher event_dispatcher_;
 };
 } // namespace hm

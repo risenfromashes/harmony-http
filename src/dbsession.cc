@@ -7,6 +7,7 @@
 #include "dbquery.h"
 #include "dbresult.h"
 #include "dbsession.h"
+#include "eventdispatcher.h"
 #include "stream.h"
 #include "worker.h"
 
@@ -218,6 +219,13 @@ static void handle_result(DispatchedQuery &query, Result &&result, bool alive,
   }
 }
 
+void Session::check_notif() {
+  PGnotify *notif;
+  while ((notif = PQnotifies(conn_))) {
+    EventDispatcher::dispatch(Event(notif->relname, notif));
+  }
+}
+
 int Session::read() {
   int rv = PQconsumeInput(conn_);
 
@@ -226,6 +234,8 @@ int Session::read() {
     std::cerr << PQerrorMessage(conn_) << std::endl;
     return -1;
   }
+
+  check_notif();
 
   while (PQisBusy(conn_) == 0) {
     // results arrived for at list one query
@@ -293,6 +303,7 @@ int Session::read() {
       return -1;
     }
 
+    check_notif();
     if (dispatched_.empty()) {
       // everything read already
       break;

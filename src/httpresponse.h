@@ -15,6 +15,7 @@ class Stream;
 // wrapper around Stream
 class HttpResponse {
   friend class Stream;
+  friend class EventSource;
 
 public:
   void set_status(const char *status);

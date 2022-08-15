@@ -11,7 +11,7 @@ struct ssl_ctx_st;
 
 namespace hm {
 class Worker;
-class FileStream;
+class FileEntry;
 class HttpSession;
 class HttpRequest;
 class HttpResponse;

@@ -118,15 +118,15 @@ void Worker::remove_session(HttpSession *session) {
   sessions_.erase(session->itr_);
 }
 
-void Worker::remove_static_file(FileStream *file) {
+void Worker::remove_static_file(FileEntry *file) {
   files_.erase(file->relpath());
 }
 
-FileStream *Worker::add_static_file(std::string path) {
+FileEntry *Worker::add_static_file(std::string path) {
   if (access(path.c_str(), R_OK) != 0) {
     return nullptr;
   }
-  auto fs = FileStream::create(std::move(path), this);
+  auto fs = FileEntry::create(std::move(path), this);
   if (fs) {
     auto *ptr = fs.get();
     // use relative path as key, including opening /
@@ -141,10 +141,10 @@ FileStream *Worker::add_static_file(std::string path) {
   return nullptr;
 }
 
-FileStream *Worker::get_static_file(const std::string_view &path,
-                                    bool prefer_compressed) {
+FileEntry *Worker::get_static_file(const std::string_view &path,
+                                   bool prefer_compressed) {
   auto [beg, end] = files_.equal_range(path);
-  FileStream *ret = nullptr;
+  FileEntry *ret = nullptr;
   for (auto itr = beg; itr != end; ++itr) {
     ret = itr->second.get();
     if (prefer_compressed && ret->compressed()) {

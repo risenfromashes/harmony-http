@@ -6,26 +6,25 @@
 
 namespace hm {
 
-StringStream::StringStream(std::string &&str) : DataStream(on_send) {
+StringStream::StringStream(std::string &&str) {
   data_ = std::move(str);
   beg_ = last_ = data_.data();
   end_ = beg_ + data_.size();
 }
-StringStream::StringStream(std::string_view str) : DataStream(on_send) {
+
+StringStream::StringStream(std::string_view str) {
   beg_ = last_ = str.data();
   end_ = beg_ + str.size();
 }
 
-int StringStream::on_send(DataStream *ds, Stream *stream, size_t length) {
-  auto self = static_cast<StringStream *>(ds);
+int StringStream::send(Stream *stream, size_t length) {
   auto wb = stream->get_buffer();
 
-  assert(self->last_ + length <= self->end_);
-  wb->write_full(self->last_, length);
-  self->last_ += length;
+  assert(last_ + length <= self->end_);
+  wb->write_full(last_, length);
+  last_ += length;
 
   return 0;
 }
 
-size_t StringStream::length() { return end_ - beg_; }
 } // namespace hm

@@ -17,7 +17,7 @@ namespace hm {
 
 Stream::Stream(HttpSession *session, int32_t stream_id)
     : headers{}, session_(session), request_(this), response_(this),
-      body_length_(0), body_offset_(0), id_(stream_id) {
+      id_(stream_id) {
   ev_timer_init(&rtimer_, timeout_cb, 0., 30.);
   ev_timer_init(&wtimer_, timeout_cb, 0., 30.);
   rtimer_.data = this;
@@ -142,8 +142,8 @@ UUIDGenerator *Stream::get_uuid_generator() {
   return session_->worker_->get_uuid_generator();
 }
 
-FileStream *Stream::get_static_file(const std::string_view &rel_path,
-                                    bool prefer_compressed) {
+FileEntry *Stream::get_static_file(const std::string_view &rel_path,
+                                   bool prefer_compressed) {
   return session_->worker_->get_static_file(rel_path, prefer_compressed);
 }
 
@@ -264,9 +264,9 @@ int Stream::submit_json_response(std::string &&response) {
 
 int Stream::submit_file_response(std::string_view path) {
 
-  auto fs = get_static_file(path, true);
+  auto file = get_static_file(path, true);
 
-  if (fs) {
+  if (file) {
     time_t last_mod = 0;
     bool last_mod_found = false;
     if (headers.ims()) {
@@ -275,8 +275,9 @@ int Stream::submit_file_response(std::string_view path) {
       last_mod_found = true;
     }
 
-    add_data_stream(fs);
-    auto [mtime, length] = fs->info();
+    auto fs = add_data_stream<FileStream>(file);
+
+    auto [mtime, length] = file->info();
     auto date = session_->get_cached_date();
 
     if (last_mod_found && mtime <= last_mod) {
@@ -284,11 +285,11 @@ int Stream::submit_file_response(std::string_view path) {
       response_headers.status = "304";
       return submit_response(nullptr);
     } else {
-      response_headers.set_header_nc("content-type", fs->mime_type());
+      response_headers.set_header_nc("content-type", file->mime_type());
       response_headers.set_header_nc("content-length",
                                      util::to_string(length, mem_block_));
-      if (fs->compressed()) {
-        response_headers.set_header_nc("content-encoding", fs->encoding());
+      if (file->compressed()) {
+        response_headers.set_header_nc("content-encoding", file->encoding());
       }
       /* for development, files might change */
       response_headers.set_header_nc("cache-control", "max-age=0");

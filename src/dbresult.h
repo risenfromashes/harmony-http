@@ -112,4 +112,19 @@ private:
   const char *error_message_;
 };
 
+// a special result, that contain
+class ResultString {
+public:
+  ResultString(Result &&result);
+
+  operator std::string_view() { return content_; }
+  std::string_view get() { return content_; }
+  size_t length() { return content_.length(); }
+  std::string_view substr(std::size_t pos) { return content_.substr(pos); }
+
+private:
+  std::string_view content_;
+  Result result_;
+};
+
 }; // namespace hm::db

@@ -124,6 +124,10 @@ Result::Result(bool error, const char *message) : error_message_(message) {
 
 bool Result::exists() { return !is_error() && num_rows() > 0; }
 
+ResultString::ResultString(Result &&result) : result_(std::move(result)) {
+  content_ = result_.value_at(0, 0);
+}
+
 #undef pg_result
 
 } // namespace hm::db

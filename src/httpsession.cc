@@ -388,24 +388,32 @@ ssize_t HttpSession::data_read_cb(nghttp2_session *session, int32_t stream_id,
 
   auto self = static_cast<HttpSession *>(user_data);
   auto stream = self->get_stream(stream_id);
+  auto ds = static_cast<DataStream *>(source->ptr);
 
-  auto nread =
-      std::min(stream->body_length_ - stream->body_offset_, (int64_t)length);
+  auto [left, should_close] = ds->remaining();
+
+  if (left == 0 && !should_close) {
+    return NGHTTP2_ERR_DEFERRED;
+  }
+
+  auto nread = std::min(left, length);
 
   *data_flags |= NGHTTP2_DATA_FLAG_NO_COPY;
 
-  if (nread == 0 || stream->body_length_ == stream->body_offset_ + nread) {
-    // end of stream
-    // TODO: manage trailers
-    *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+  if (should_close) {
+    if (nread == 0 || left == nread) {
+      // end of stream
+      // TODO: manage trailers
+      *data_flags |= NGHTTP2_DATA_FLAG_EOF;
 
-    if (nghttp2_session_get_stream_remote_close(self->get_nghttp2_session(),
-                                                stream_id) == 0) {
-      // stream should be half closed
-      stream->stop_read_timeout();
-      stream->stop_write_timeout();
+      if (nghttp2_session_get_stream_remote_close(self->get_nghttp2_session(),
+                                                  stream_id) == 0) {
+        // stream should be half closed
+        stream->stop_read_timeout();
+        stream->stop_write_timeout();
 
-      stream->submit_rst(NGHTTP2_NO_ERROR);
+        stream->submit_rst(NGHTTP2_NO_ERROR);
+      }
     }
   }
 
@@ -625,12 +633,10 @@ int HttpSession::send_data_cb(nghttp2_session *session, nghttp2_frame *frame,
     wb.write_byte(padlen - 1);
   }
 
-  int rv = self->send_data(self, stream, length);
+  int rv = self->send(stream, length);
   if (rv != 0) {
     return rv;
   }
-
-  stream->body_offset_ += length;
 
   if (padlen) {
     wb.fill(0, padlen - 1);

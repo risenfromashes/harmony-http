@@ -15,6 +15,7 @@
 #include "buffer.h"
 #include "datastream.h"
 #include "dbsession.h"
+#include "eventstream.h"
 #include "filestream.h"
 #include "httprequest.h"
 #include "httpresponse.h"
@@ -70,22 +71,12 @@ public:
   T *add_data_stream(auto &&...args) {
     auto &ds =
         data_stream_store_.emplace<T>(std::forward<decltype(args)>(args)...);
-    body_length_ = ds.length();
-    body_offset_ = 0;
     data_stream_ = &ds;
     return &ds;
   }
 
-  /* don't own the DataStream */
-  template <std::derived_from<DataStream> T> T *add_data_stream(T *ds) {
-    body_length_ = ds->length();
-    body_offset_ = 0;
-    data_stream_ = ds;
-    return ds;
-  }
-
-  FileStream *get_static_file(const std::string_view &rel_path,
-                              bool prefer_compressed = true);
+  FileEntry *get_static_file(const std::string_view &rel_path,
+                             bool prefer_compressed = true);
 
   void parse_path();
 
@@ -236,14 +227,13 @@ private:
   ev_timer rtimer_;
   ev_timer wtimer_;
 
-  int64_t body_length_;
-  int64_t body_offset_;
-
   int32_t id_;
 
   util::MemBlock<512> mem_block_;
 
-  std::variant<std::monostate, StringStream, FileStream> data_stream_store_;
+  std::variant<std::monostate, StringStream, FileStream, EventStream>
+      data_stream_store_;
+
   DataStream *data_stream_ = nullptr;
 
   Task<> coro_handler_;

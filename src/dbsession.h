@@ -69,6 +69,7 @@ private:
   int read();
   int write();
   int poll_connection();
+  void check_notif();
 
   inline int connection_made();
 
