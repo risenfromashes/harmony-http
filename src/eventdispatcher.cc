@@ -26,7 +26,9 @@ void EventDispatcher::publish(Event &&event_) {
   }
 }
 
-EventDispatcher *get() { return Worker::get_worker()->get_event_dispatcher(); }
+EventDispatcher *EventDispatcher::get() {
+  return Worker::get_worker()->get_event_dispatcher();
+}
 
 void EventDispatcher::listen(std::string &&channel, EventStream *event_stream) {
   get()->suscribe(std::move(channel), event_stream);

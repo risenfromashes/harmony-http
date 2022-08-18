@@ -30,13 +30,22 @@ add_library(
   src/server.cc
   src/worker.h
   src/worker.cc
-  src/dbsession.h
-  src/dbsession.cc
   src/dbquery.h
   src/dbresult.h
   src/dbresult.cc
   src/dbconnection.h
   src/dbconnection.cc
+  src/dbnotify.h
+  src/dbnotify.cc
+  src/dbsession.h
+  src/dbsession.cc
+  src/event.h
+  src/eventsource.h
+  src/eventsource.cc
+  src/eventdispatcher.h
+  src/eventdispatcher.cc
+  src/eventstream.h
+  src/eventstream.cc
   src/httprouter.h
   src/httprouter.cc
   src/httprequest.h
@@ -50,6 +59,8 @@ add_library(
   src/datastream.h
   src/filestream.h
   src/filestream.cc
+  src/fileentry.h
+  src/fileentry.cc
   src/stringstream.h
   src/stringstream.cc
   src/buffer.h

@@ -391,8 +391,10 @@ ssize_t HttpSession::data_read_cb(nghttp2_session *session, int32_t stream_id,
   auto ds = static_cast<DataStream *>(source->ptr);
 
   auto [left, should_close] = ds->remaining();
+  // std::cout << "left: " << left << std::endl
+  //           << "should_close: " << should_close << std::endl;
 
-  if (left == 0 && !should_close) {
+  if (left <= 0 && !should_close) {
     return NGHTTP2_ERR_DEFERRED;
   }
 
@@ -514,6 +516,7 @@ int HttpSession::on_frame_recv_cb(nghttp2_session *session,
     }
   }
   case NGHTTP2_HEADERS: {
+
     auto stream = self->get_stream(frame->hd.stream_id);
     if (!stream) {
       return 0;

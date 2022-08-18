@@ -198,6 +198,7 @@ int Stream::submit_response(DataStream *data_stream) {
   response_headers.set_status();
 
   auto [nvbuf, nvlen] = response_headers.get_buffer();
+
   nghttp2_data_provider dp;
   if (data_stream) {
     dp.source.ptr = data_stream;
@@ -267,6 +268,7 @@ int Stream::submit_file_response(std::string_view path) {
   auto file = get_static_file(path, true);
 
   if (file) {
+
     time_t last_mod = 0;
     bool last_mod_found = false;
     if (headers.ims()) {

@@ -3,14 +3,19 @@
 
 namespace hm {
 
-int FileStream::send(Stream *stream, size_t length) {
+FileStream::FileStream(FileEntry *file_entry)
+    : file_(file_entry), length_(file_entry->info().length) {
+  pos_ = 0;
+}
 
-  assert(length < left());
+int FileStream::send(Stream *stream, size_t wlen) {
+
+  assert(0 <= wlen && wlen <= remaining().first);
   auto wb = stream->get_buffer();
 
-  while (length) {
+  while (wlen) {
     ssize_t nread;
-    while ((nread = pread(file_->fd(), wb->last(), length, pos_)) == -1 &&
+    while ((nread = pread(file_->fd(), wb->last(), wlen, pos_)) == -1 &&
            errno == EINTR)
       ;
 
@@ -24,9 +29,10 @@ int FileStream::send(Stream *stream, size_t length) {
       return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
     }
 
-    length_ -= nread;
-    pos_ += nread;
+    wlen -= nread;
     wb->write(nread);
+
+    pos_ += nread;
   }
 
   return 0;

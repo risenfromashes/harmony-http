@@ -283,4 +283,8 @@ std::optional<std::string_view> get_cookie(std::string_view cookies,
 
 void append_quoted_string(std::string_view sv, std::string &ret_);
 
+inline std::string as_string(std::string_view sv) {
+  return {sv.begin(), sv.end()};
+}
+
 } // namespace hm::util

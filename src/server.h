@@ -28,12 +28,18 @@ class Server {
 
 public:
   struct Config {
-    const int num_threads;
-    const char *port;
-    const char *dhparam_file;
-    const char *cert_file;
-    const char *key_file;
+    int num_threads;
+    double timeout;
+    std::string port;
+    std::string dhparam_file;
+    std::string cert_file;
+    std::string key_file;
+    std::string static_dir;
+    std::string database_connection;
+    std::string query_dir;
   };
+
+  static Config load_config(const char *config_file);
 
   Server(const Config &config);
   ~Server();
@@ -48,7 +54,7 @@ public:
   Server &post(const char *route,
                std::invocable<HttpRequest *, HttpResponse *> auto &&cb);
 
-  void listen(double timeout = 0.0);
+  void listen();
 
   friend Server *get_server() { return Server::instance_; }
 

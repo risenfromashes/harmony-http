@@ -10,6 +10,7 @@
 #include "filestream.h"
 #include "httpsession.h"
 #include "server.h"
+#include "simdjson/padded_string.h"
 #include "util.h"
 #include "worker.h"
 
@@ -28,6 +29,25 @@
 #include <openssl/ssl.h>
 
 namespace hm {
+
+Server::Config Server::load_config(const char *config_file) {
+  simdjson::ondemand::parser parser;
+  auto json = simdjson::padded_string::load(config_file);
+  auto conf = parser.iterate(json);
+  int64_t threads = conf["threads"];
+  threads = threads > 0 ? threads : std::thread::hardware_concurrency();
+  Config rt = {.num_threads = (int)threads,
+               .timeout = conf["timeout"],
+               .port = util::as_string(conf["port"]),
+               .dhparam_file = util::as_string(conf["dhparam"]),
+               .cert_file = util::as_string(conf["certificate"]),
+               .key_file = util::as_string(conf["key"]),
+               .static_dir = util::as_string(conf["static"]),
+               .database_connection = util::as_string(conf["database"]),
+               .query_dir = util::as_string(conf["queries"])};
+  return rt;
+}
+
 Server::Server(const Config &config)
     : config_(config), ssl_ctx_(nullptr, nullptr) {
   if (!instance_) {
@@ -41,6 +61,10 @@ Server::Server(const Config &config)
     auto worker = std::make_unique<Worker>(this);
     workers_.push_back(std::move(worker));
   }
+
+  serve_static_files(config.static_dir);
+  connect_database(config.database_connection.c_str());
+  set_query_location(config.query_dir.c_str());
 }
 
 Server::~Server() { workers_.clear(); }
@@ -56,7 +80,8 @@ std::pair<int, std::optional<int>> Server::start_listen() {
 
   addrinfo *res, *rp;
   // let address default to localhost and set port
-  if (int r = getaddrinfo(nullptr, config_.port, &hints, &res); r != 0) {
+  if (int r = getaddrinfo(nullptr, config_.port.c_str(), &hints, &res);
+      r != 0) {
     std::cerr << "getaddrinfo() failed: " << gai_strerror(r) << std::endl;
     freeaddrinfo(res);
     return {-1, std::nullopt};
@@ -148,8 +173,9 @@ Server::SSLContext Server::create_ssl_ctx() {
   }
 
   // set dh params
-  auto bio = util::unique_ptr<BIO>(BIO_new_file(config_.dhparam_file, "rb"),
-                                   [](BIO *bio) { BIO_free(bio); });
+  auto bio =
+      util::unique_ptr<BIO>(BIO_new_file(config_.dhparam_file.c_str(), "rb"),
+                            [](BIO *bio) { BIO_free(bio); });
 
   if (bio == nullptr) {
     std::cerr << "BIO_new_file() failed: "
@@ -177,7 +203,7 @@ Server::SSLContext Server::create_ssl_ctx() {
   }
 
   // set private key file
-  if (SSL_CTX_use_PrivateKey_file(ssl_ctx.get(), config_.key_file,
+  if (SSL_CTX_use_PrivateKey_file(ssl_ctx.get(), config_.key_file.c_str(),
                                   SSL_FILETYPE_PEM) != 1) {
     std::cerr << "SSL_CTX_use_PrivateKey_file failed: "
               << ERR_error_string(ERR_get_error(), nullptr) << std::endl;
@@ -185,8 +211,8 @@ Server::SSLContext Server::create_ssl_ctx() {
   }
 
   // set certificate file
-  if (SSL_CTX_use_certificate_chain_file(ssl_ctx.get(), config_.cert_file) !=
-      1) {
+  if (SSL_CTX_use_certificate_chain_file(ssl_ctx.get(),
+                                         config_.cert_file.c_str()) != 1) {
     std::cerr << "SSL_CTX_use_certificate_chain_file failed: "
               << ERR_error_string(ERR_get_error(), nullptr) << std::endl;
     return {nullptr, nullptr};
@@ -250,7 +276,9 @@ static void configure_signals() {
   sigaction(SIGPIPE, &sa, NULL);
 }
 
-void Server::listen(double timeout) {
+void Server::listen() {
+  double timeout = config_.timeout;
+
   configure_signals();
 
   ssl_ctx_ = create_ssl_ctx();
@@ -285,6 +313,11 @@ void Server::listen(double timeout) {
   }
 
   ev_io_start(loop_, &accept_watcher);
+
+  std::clog << "Server starting with " << workers_.size() << " threads and "
+            << timeout << " seconds timeout on port " << config_.port
+            << std::endl;
+
   ev_run(loop_, 0);
 }
 

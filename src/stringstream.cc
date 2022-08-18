@@ -20,7 +20,7 @@ StringStream::StringStream(std::string_view str) {
 int StringStream::send(Stream *stream, size_t length) {
   auto wb = stream->get_buffer();
 
-  assert(last_ + length <= self->end_);
+  assert(last_ + length <= end_);
   wb->write_full(last_, length);
   last_ += length;
 

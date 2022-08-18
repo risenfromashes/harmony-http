@@ -17,11 +17,12 @@ public:
   size_t length() override { return length_; }
   size_t offset() override { return pos_; }
   std::pair<size_t, bool> remaining() override {
-    return {pos_ - length_, true};
+    return {length_ - pos_, true};
   }
 
 private:
-  size_t pos_, length_;
+  size_t length_;
+  size_t pos_;
   FileEntry *file_;
 };
 } // namespace hm
