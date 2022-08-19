@@ -32,6 +32,12 @@ public:
       return get(name);
     }
 
+    std::optional<std::string_view> operator[](unsigned int index) {
+      return result_->value_at(row_index_, index);
+    }
+
+    operator std::string_view() { return result_->value_at(row_index_, 0); }
+
     friend bool operator==(const Iterator &a, const Iterator &b);
 
   private:

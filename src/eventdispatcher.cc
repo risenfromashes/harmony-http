@@ -11,9 +11,11 @@ void EventDispatcher::suscribe(std::string &&channel_,
   if (auto itr = registry_.find(channel); itr != registry_.end()) {
     itr->second.push_back(event_stream);
   } else {
-    auto [nitr, inserted] = registry_.try_emplace(std::move(channel));
-    assert(inserted);
-    itr->second.push_back(event_stream);
+    {
+      auto [itr, inserted] = registry_.try_emplace(std::move(channel));
+      assert(inserted);
+      itr->second.push_back(event_stream);
+    }
   }
 }
 

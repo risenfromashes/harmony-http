@@ -9,10 +9,13 @@ namespace hm {
 class EventStream;
 
 class EventSource {
+  EventSource(EventStream *stream);
+
 public:
-  EventSource(HttpRequest *req, HttpResponse *res);
+  static EventSource create(HttpRequest *req, HttpResponse *res);
 
   void suscribe(std::string &&channel);
+  void suscribe(std::string_view channel);
 
   void send(Event &&event);
 

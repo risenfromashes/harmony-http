@@ -25,6 +25,11 @@ struct Event {
 
   Event(std::string_view channel, const std::string &payload) = delete;
 
+  Event(std::string_view channel, const char *payload)
+      : channel(channel), content(std::string_view(payload)) {
+    name = channel.substr(0, name.find('/'));
+  }
+
   Event(std::string_view channel, std::string &&payload)
       : channel(channel), content(std::move(payload)) {
     name = channel.substr(0, name.find('/'));

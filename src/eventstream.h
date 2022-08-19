@@ -10,8 +10,12 @@
 #include <unordered_map>
 #include <variant>
 
+#include <ev.h>
+
 #include "dbresult.h"
 #include "event.h"
+
+#include <iostream>
 
 namespace hm {
 
@@ -19,25 +23,11 @@ class EventStream : public DataStream {
 public:
 public:
   EventStream(Stream *stream);
+  ~EventStream();
 
   int send(Stream *stream, size_t length) override;
 
-  size_t length() override {
-    if (queue_.empty()) {
-      paused_ = true;
-      return 0;
-    }
-
-    // event: <name>\n
-    // data: <data>\n
-    //\n
-    // (three new lines)
-    static const size_t extra =
-        std::strlen("event: ") + std::strlen("data: ") + 3;
-
-    auto &ev = queue_.front();
-    return ev.name.length() + ev.length() + extra;
-  }
+  size_t length() override;
 
   size_t offset() override { return pos_; }
 
@@ -47,9 +37,16 @@ public:
 
   void submit(Event &&event);
 
+  void ping();
+
+private:
+  static void periodic_cb(struct ev_loop *loop, ev_periodic *w, int revents);
+
 private:
   Stream *stream_;
   size_t pos_;
+
+  ev_periodic evp_;
 
   std::deque<Event> queue_;
   bool paused_;

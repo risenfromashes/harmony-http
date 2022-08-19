@@ -385,7 +385,6 @@ ssize_t HttpSession::data_read_cb(nghttp2_session *session, int32_t stream_id,
                                   uint32_t *data_flags,
                                   nghttp2_data_source *source,
                                   void *user_data) {
-
   auto self = static_cast<HttpSession *>(user_data);
   auto stream = self->get_stream(stream_id);
   auto ds = static_cast<DataStream *>(source->ptr);

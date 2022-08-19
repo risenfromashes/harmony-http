@@ -14,6 +14,7 @@
 
 #include "buffer.h"
 #include "datastream.h"
+#include "dbresult.h"
 #include "dbsession.h"
 #include "eventstream.h"
 #include "filestream.h"
@@ -34,6 +35,7 @@ class Stream {
   friend class HttpSession;
   friend class StringStream;
   friend class FileStream;
+  friend class EventStream;
   friend class HttpRequest;
   friend class HttpRouter;
 
@@ -91,7 +93,10 @@ public:
   //                            std::string_view response);
   int submit_string_response(std::string &&str);
   int submit_html_response(std::string &&response);
+
   int submit_json_response(std::string &&response);
+  int submit_json_response(db::ResultString &&response);
+
   int submit_file_response(std::string_view path);
   int submit_file_response();
 

@@ -33,6 +33,10 @@ void HttpResponse::send_json(std::string &&str) {
   stream_->submit_json_response(std::move(str));
 }
 
+void HttpResponse::send_json(db::ResultString &&str) {
+  stream_->submit_json_response(std::move(str));
+}
+
 void HttpResponse::send_file(const char *path) {
   if (path == nullptr) {
     stream_->submit_file_response();

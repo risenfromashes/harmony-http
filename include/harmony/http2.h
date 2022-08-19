@@ -3,6 +3,7 @@
 
 #include "../../src/dbconnection.h"
 
+#include "../../src/eventsource.h"
 #include "../../src/httprequest.h"
 #include "../../src/httpresponse.h"
 

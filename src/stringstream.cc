@@ -8,13 +8,21 @@ namespace hm {
 
 StringStream::StringStream(std::string &&str) {
   data_ = std::move(str);
-  beg_ = last_ = data_.data();
-  end_ = beg_ + data_.size();
+  auto &data = std::get<std::string>(data_);
+  beg_ = last_ = data.data();
+  end_ = beg_ + data.size();
 }
 
 StringStream::StringStream(std::string_view str) {
   beg_ = last_ = str.data();
   end_ = beg_ + str.size();
+}
+
+StringStream::StringStream(db::ResultString &&res) {
+  data_ = std::move(res);
+  std::string_view data = std::get<db::ResultString>(data_);
+  beg_ = last_ = data.data();
+  end_ = beg_ + data.size();
 }
 
 int StringStream::send(Stream *stream, size_t length) {

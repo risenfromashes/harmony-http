@@ -1,4 +1,5 @@
 #include <ev.h>
+
 #include <iostream>
 
 #include "buffer.h"
@@ -175,8 +176,13 @@ void Stream::timeout_cb(struct ev_loop *loop, ev_timer *w, int revents) {
   auto self = static_cast<Stream *>(w->data);
   auto session = self->session_;
 
-  std::cerr << "Ending stream " << self->id_ << " due to read/write timeout"
-            << std::endl;
+  if (&self->wtimer_ == w) {
+    std::cerr << "Ending stream " << self->id_ << " due to write timeout"
+              << std::endl;
+  } else {
+    std::cerr << "Ending stream " << self->id_ << " due to read timeout"
+              << std::endl;
+  }
 
   ev_timer_stop(session->loop_, &self->rtimer_);
   ev_timer_stop(session->loop_, &self->wtimer_);
@@ -254,6 +260,16 @@ int Stream::submit_html_response(std::string &&response) {
 
 int Stream::submit_json_response(std::string &&response) {
 
+  auto ss = add_data_stream<StringStream>(std::move(response));
+
+  response_headers.set_header_nc("content-type", "application/json");
+  response_headers.set_header_nc("content-length",
+                                 util::to_string(ss->length(), mem_block_));
+
+  return submit_response(ss);
+}
+
+int Stream::submit_json_response(db::ResultString &&response) {
   auto ss = add_data_stream<StringStream>(std::move(response));
 
   response_headers.set_header_nc("content-type", "application/json");

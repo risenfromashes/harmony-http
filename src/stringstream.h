@@ -4,6 +4,9 @@
 
 #include <cstdint>
 #include <memory>
+#include <variant>
+
+#include "dbresult.h"
 
 namespace hm {
 
@@ -12,6 +15,7 @@ class StringStream : public DataStream {
 public:
   StringStream(std::string_view str);
   StringStream(std::string &&str);
+  StringStream(db::ResultString &&res);
   StringStream(const std::string &) = delete;
 
   int send(Stream *stream, size_t length) override;
@@ -21,7 +25,7 @@ public:
   std::pair<size_t, bool> remaining() override { return {end_ - last_, true}; }
 
 private:
-  std::string data_;
+  std::variant<std::string, db::ResultString> data_;
   const char *beg_, *last_, *end_;
 };
 } // namespace hm

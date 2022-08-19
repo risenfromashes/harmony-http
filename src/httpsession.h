@@ -50,6 +50,9 @@ public:
 
   std::string_view get_cached_date() { return worker_->get_cached_date(); }
 
+  void start_read() { ev_io_start(loop_, &rev_); }
+  void start_write() { ev_io_start(loop_, &wev_); }
+
 private:
   static void settings_timeout_cb(struct ev_loop *loop, ev_timer *t,
                                   int revents);
