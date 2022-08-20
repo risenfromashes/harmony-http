@@ -7,6 +7,12 @@ namespace hm::db {
 class Notify {
 public:
   Notify(void *ptr);
+
+  Notify(Notify &&);
+  Notify &operator=(Notify &&);
+  Notify(const Notify &) = delete;
+  Notify &operator=(const Notify &) = delete;
+
   ~Notify();
 
   std::string_view channel();

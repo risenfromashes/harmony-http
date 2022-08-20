@@ -203,7 +203,6 @@ static void handle_result(DispatchedQuery &query, Result &&result, bool alive,
   if (alive) {
     auto &handler = query.completion_handler;
     if (std::holds_alternative<std::coroutine_handle<>>(handler)) {
-
       auto c = std::get<std::coroutine_handle<>>(handler);
       auto coro =
           std::coroutine_handle<AwaitableTask<Result>::Promise>::from_address(
@@ -220,9 +219,13 @@ static void handle_result(DispatchedQuery &query, Result &&result, bool alive,
 }
 
 void Session::check_notif() {
-  PGnotify *notif;
-  while ((notif = PQnotifies(conn_))) {
+  PGnotify *notif = PQnotifies(conn_);
+  while (notif) {
+    // std::cerr << "Got notification!" << std::endl;
+    // std::cerr << "channel: " << notif->relname << std::endl;
+    // std::cerr << "payload: " << notif->extra << std::endl;
     EventDispatcher::dispatch(Event(notif->relname, notif));
+    notif = PQnotifies(conn_);
   }
 }
 
@@ -275,8 +278,6 @@ int Session::read() {
         PQclear(result);
         break;
       case PGRES_PIPELINE_SYNC:
-        assert(query.is_sync_point &&
-               "SYNC must occur on query that is marked sync point");
         pipeline_sync = true;
         PQclear(result);
         break;
@@ -294,8 +295,7 @@ int Session::read() {
       }
     }
 
-    // wait for pipeline sync before removing the query marked sync
-    if (!query.is_sync_point || pipeline_sync) {
+    if (!pipeline_sync && !dispatched_.empty()) {
       dispatched_.pop_front();
     }
 

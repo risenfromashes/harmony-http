@@ -8,14 +8,12 @@ namespace hm {
 void EventDispatcher::suscribe(std::string &&channel_,
                                EventStream *event_stream) {
   std::string channel = std::move(channel_);
+
   if (auto itr = registry_.find(channel); itr != registry_.end()) {
     itr->second.push_back(event_stream);
   } else {
-    {
-      auto [itr, inserted] = registry_.try_emplace(std::move(channel));
-      assert(inserted);
-      itr->second.push_back(event_stream);
-    }
+    registry_.try_emplace(std::move(channel),
+                          std::vector<EventStream *>{event_stream});
   }
 }
 

@@ -93,6 +93,11 @@ int EventStream::send(Stream *stream, size_t wlen) {
 }
 
 void EventStream::submit(Event &&event) {
+  // std::cerr << "Sending event: " << std::endl;
+  // std::cerr << "event.channel: " << event.channel << std::endl;
+  // std::cerr << "event.name: " << event.name << std::endl;
+  // std::cerr << "event.data: " << event.view() << std::endl;
+
   queue_.emplace_back(std::move(event));
   if (paused_) {
     auto rt = nghttp2_session_resume_data(

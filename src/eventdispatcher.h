@@ -5,6 +5,8 @@
 
 #include "eventstream.h"
 
+#include "util.h"
+
 namespace hm {
 
 class EventDispatcher {
@@ -18,7 +20,7 @@ public:
   static void dispatch(Event &&event);
 
 private:
-  std::unordered_map<std::string_view, std::vector<EventStream *>> registry_;
+  util::string_map<std::vector<EventStream *>> registry_;
 };
 
 } // namespace hm

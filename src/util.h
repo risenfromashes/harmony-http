@@ -293,4 +293,22 @@ inline std::string as_string(std::string_view sv) {
   return {sv.begin(), sv.end()};
 }
 
+struct string_hash {
+  using is_transparent = void;
+  [[nodiscard]] size_t operator()(const char *txt) const {
+    return std::hash<std::string_view>{}(txt);
+  }
+  [[nodiscard]] size_t operator()(std::string_view txt) const {
+    return std::hash<std::string_view>{}(txt);
+  }
+  [[nodiscard]] size_t operator()(const std::string &txt) const {
+    return std::hash<std::string>{}(txt);
+  }
+};
+
+// Declaration of map
+template <class T>
+using string_map =
+    std::unordered_map<std::string, T, string_hash, std::equal_to<>>;
+
 } // namespace hm::util
