@@ -14,10 +14,13 @@ class EventDispatcher {
 public:
   void suscribe(std::string &&channel, EventStream *event_stream);
   void publish(Event &&event);
+  void remove(EventStream *stream);
 
   static EventDispatcher *get();
   static void listen(std::string &&channel, EventStream *event_stream);
   static void dispatch(Event &&event);
+
+  static void remove_stream(EventStream *);
 
 private:
   util::string_map<std::vector<EventStream *>> registry_;

@@ -14,6 +14,7 @@ EventStream::EventStream(Stream *stream) : stream_(stream), paused_(false) {
 
 EventStream::~EventStream() {
   ev_periodic_stop(Worker::get_worker()->get_loop(), &evp_);
+  EventDispatcher::remove_stream(this);
 }
 
 int EventStream::send(Stream *stream, size_t wlen) {

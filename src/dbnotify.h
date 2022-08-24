@@ -10,6 +10,7 @@ public:
 
   Notify(Notify &&);
   Notify &operator=(Notify &&);
+
   Notify(const Notify &) = delete;
   Notify &operator=(const Notify &) = delete;
 
