@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -13,13 +14,20 @@ struct Event {
   std::string_view name;
   std::string_view channel;
 
-  std::variant<std::string, std::string_view, db::ResultString, db::Notify>
+  std::variant<std::string, std::string_view, db::SharedResultString,
+               db::SharedNotify>
       content;
 
-  size_t length() {
+  Event(Event &&b)
+      : name(b.name), channel(b.channel), content(std::move(b.content)) {}
+
+  Event(const Event &b)
+      : name(b.name), channel(b.channel), content(b.content) {}
+
+  size_t length() const {
     return std::visit([](auto &&v) -> size_t { return v.length(); }, content);
   }
-  std::string_view view() {
+  std::string_view view() const {
     return std::visit([](auto &&v) -> std::string_view { return v; }, content);
   }
 
@@ -40,13 +48,13 @@ struct Event {
     name = channel.substr(0, channel.find('/'));
   }
 
-  Event(std::string_view channel, db::ResultString &&payload)
-      : channel(channel), content(std::move(payload)) {
+  Event(std::string_view channel, const db::SharedResultString &payload)
+      : channel(channel), content(payload) {
     name = channel.substr(0, channel.find('/'));
   }
 
-  Event(std::string_view channel, db::Notify &&notif)
-      : channel(channel), content(std::move(notif)) {
+  Event(std::string_view channel, const db::SharedNotify &notif)
+      : channel(channel), content(notif) {
     name = channel.substr(0, channel.find('/'));
   }
 };

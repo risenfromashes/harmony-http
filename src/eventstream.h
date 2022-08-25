@@ -36,6 +36,7 @@ public:
   }
 
   void submit(Event &&event);
+  void submit(const Event &event);
 
   void ping();
 

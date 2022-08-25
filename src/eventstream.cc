@@ -94,12 +94,29 @@ int EventStream::send(Stream *stream, size_t wlen) {
 }
 
 void EventStream::submit(Event &&event) {
+
   // std::cerr << "Sending event: " << std::endl;
   // std::cerr << "event.channel: " << event.channel << std::endl;
   // std::cerr << "event.name: " << event.name << std::endl;
   // std::cerr << "event.data: " << event.view() << std::endl;
-
   queue_.emplace_back(std::move(event));
+  if (paused_) {
+    auto rt = nghttp2_session_resume_data(
+        stream_->get_session()->get_nghttp2_session(), stream_->id());
+
+    // reset offset
+    pos_ = 0;
+    paused_ = false;
+    stream_->get_session()->start_write();
+  }
+}
+
+void EventStream::submit(const Event &event) {
+  // std::cerr << "Sending event: " << std::endl;
+  // std::cerr << "event.channel: " << event.channel << std::endl;
+  // std::cerr << "event.name: " << event.name << std::endl;
+  // std::cerr << "event.data: " << event.view() << std::endl;
+  queue_.emplace_back(event);
   if (paused_) {
     auto rt = nghttp2_session_resume_data(
         stream_->get_session()->get_nghttp2_session(), stream_->id());

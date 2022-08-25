@@ -1,10 +1,38 @@
 #pragma once
 
+#include <memory>
 #include <string_view>
 
 namespace hm::db {
 
-class Notify {
+class NotifyBase {
+public:
+  NotifyBase(void *ptr);
+
+  NotifyBase(NotifyBase &&);
+  NotifyBase &operator=(NotifyBase &&);
+
+  NotifyBase(const NotifyBase &);
+  NotifyBase &operator=(const NotifyBase &);
+
+  ~NotifyBase();
+
+  std::string_view channel() const;
+
+  operator std::string_view() const;
+
+  size_t length() const;
+
+protected:
+  void assign(const NotifyBase &b);
+  void reset();
+  static void deleter(void *ptr);
+
+  void *pg_notify_;
+  std::string_view payload_;
+};
+
+class Notify : public NotifyBase {
 public:
   Notify(void *ptr);
 
@@ -16,15 +44,24 @@ public:
 
   ~Notify();
 
-  std::string_view channel();
+private:
+  std::unique_ptr<void, void (*)(void *)> ptr_;
+};
 
-  operator std::string_view();
+class SharedNotify : public NotifyBase {
+public:
+  SharedNotify(void *ptr);
 
-  size_t length();
+  SharedNotify(SharedNotify &&);
+  SharedNotify &operator=(SharedNotify &&);
+
+  SharedNotify(const SharedNotify &);
+  SharedNotify &operator=(const SharedNotify &);
+
+  ~SharedNotify();
 
 private:
-  void *pg_notify_;
-  std::string_view payload_;
+  std::shared_ptr<void> ptr_;
 };
 
 }; // namespace hm::db

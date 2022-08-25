@@ -224,7 +224,7 @@ void Session::check_notif() {
     // std::cerr << "Got notification!" << std::endl;
     // std::cerr << "channel: " << notif->relname << std::endl;
     // std::cerr << "payload: " << notif->extra << std::endl;
-    EventDispatcher::dispatch(Event(notif->relname, notif));
+    EventDispatcher::dispatch(Event(notif->relname, SharedNotify(notif)));
     notif = PQnotifies(conn_);
   }
 }

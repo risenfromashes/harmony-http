@@ -44,7 +44,7 @@ void EventDispatcher::publish(Event &&event_) {
   if (auto itr = registry_.find(event.channel); itr != registry_.end()) {
     for (auto es : itr->second) {
       if (es) {
-        es->submit(std::move(event));
+        es->submit(event);
       }
     }
   }
