@@ -7,9 +7,6 @@
 [submodule "third_party/stduuid"]
 	path = third_party/stduuid
 	url = https://github.com/mariusbancila/stduuid
-[submodule "third_party/nghttp2"]
-	path = third_party/nghttp2
-	url = https://github.com/nghttp2/nghttp2
 [submodule "third_party/memory"]
 	path = third_party/memory
 	url = https://github.com/foonathan/memory
