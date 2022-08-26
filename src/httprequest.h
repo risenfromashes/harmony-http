@@ -32,6 +32,7 @@ public:
   AwaitableTask<std::string_view> body();
 
   HttpRequest &on_data(std::function<void(std::string_view)> &&cb);
+
   AwaitableTask<std::string_view> data();
 
   AwaitableTask<simdjson::ondemand::document> json();
@@ -43,7 +44,7 @@ public:
 
 private:
   void add_to_body(std::string_view str);
-  void handle_data(std::string_view str);
+  void handle_data(std::string_view str, bool eof = false);
   void handle_body();
 
 private:
@@ -53,12 +54,17 @@ private:
   size_t handler_index_;
 
   Stream *stream_;
+
   std::string body_;
+  std::string_view data_;
+
   std::function<void(const std::string &body)> on_body_cb_;
   std::function<void(std::string_view)> on_data_cb_;
 
   coro_handle body_coro_, data_coro_;
   bool data_chunk_mode_;
+  bool data_ready_;
+  bool buffered_;
 };
 
 constexpr std::optional<std::string_view>

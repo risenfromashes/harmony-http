@@ -122,11 +122,11 @@ void Worker::remove_static_file(FileEntry *file) {
   files_.erase(file->relpath());
 }
 
-FileEntry *Worker::add_static_file(std::string path) {
+FileEntry *Worker::add_static_file(std::string path, bool watch) {
   if (access(path.c_str(), R_OK) != 0) {
     return nullptr;
   }
-  auto fs = FileEntry::create(std::move(path), this);
+  auto fs = FileEntry::create(std::move(path), this, watch);
   if (fs) {
     auto *ptr = fs.get();
     // use relative path as key, including opening /
@@ -142,7 +142,8 @@ FileEntry *Worker::add_static_file(std::string path) {
 }
 
 FileEntry *Worker::get_static_file(const std::string_view &path,
-                                   bool prefer_compressed) {
+                                   bool prefer_compressed, bool relative,
+                                   bool watch) {
   auto [beg, end] = files_.equal_range(path);
   FileEntry *ret = nullptr;
   for (auto itr = beg; itr != end; ++itr) {
@@ -157,12 +158,17 @@ FileEntry *Worker::get_static_file(const std::string_view &path,
   if (!ret) {
     // file doesn't exist yet
     // try to add it
-    ret = add_static_file(server_->static_root_ + std::string(path));
+    if (relative) {
+      ret = add_static_file(server_->static_root_ + std::string(path), watch);
+    } else {
+      ret = add_static_file(std::string(path), watch);
+    }
+
     // also check if there is compressed files available
 
     if (prefer_compressed) {
-      auto br =
-          add_static_file(server_->static_root_ + std::string(path) + ".br");
+      auto br = add_static_file(
+          server_->static_root_ + std::string(path) + ".br", watch);
       if (br) {
         return br;
       }

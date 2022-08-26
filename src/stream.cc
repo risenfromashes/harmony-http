@@ -144,8 +144,10 @@ UUIDGenerator *Stream::get_uuid_generator() {
 }
 
 FileEntry *Stream::get_static_file(const std::string_view &rel_path,
-                                   bool prefer_compressed) {
-  return session_->worker_->get_static_file(rel_path, prefer_compressed);
+                                   bool prefer_compressed, bool relative,
+                                   bool watch) {
+  return session_->worker_->get_static_file(rel_path, prefer_compressed,
+                                            relative, watch);
 }
 
 Buffer<64 * 1024> *Stream::get_buffer() { return &session_->wbuf_; }
@@ -279,9 +281,10 @@ int Stream::submit_json_response(db::ResultString &&response) {
   return submit_response(ss);
 }
 
-int Stream::submit_file_response(std::string_view path) {
+int Stream::submit_file_response(std::string_view path, bool prefer_compressed,
+                                 bool relative, bool watch) {
 
-  auto file = get_static_file(path, true);
+  auto file = get_static_file(path, prefer_compressed, relative, watch);
 
   if (file) {
 

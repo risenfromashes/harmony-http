@@ -75,4 +75,6 @@ uuids::uuid generate_uuid();
 
 simdjson::ondemand::parser *get_json_parser();
 
+std::string_view get_extension(std::string_view mime_type);
+
 } // namespace hm::util

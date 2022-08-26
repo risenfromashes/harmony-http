@@ -497,7 +497,7 @@ int HttpSession::on_frame_recv_cb(nghttp2_session *session,
       return 0;
     }
 
-    // data frames surely come after header frames
+    // data frames surely come after header frames??
     if (!stream->prepared_response_) {
       stream->parse_path();
       auto method = stream->headers.method;
@@ -514,6 +514,7 @@ int HttpSession::on_frame_recv_cb(nghttp2_session *session,
       stream->reset_read_timeout();
     }
   }
+
   case NGHTTP2_HEADERS: {
 
     auto stream = self->get_stream(frame->hd.stream_id);
@@ -533,12 +534,14 @@ int HttpSession::on_frame_recv_cb(nghttp2_session *session,
     }
 
     if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+
       if (!stream->prepared_response_) {
         stream->parse_path();
         auto method = stream->headers.method;
         stream->prepare_response();
         stream->prepared_response_ = true;
       }
+
       stream->stop_read_timeout();
     } else {
       stream->reset_read_timeout();

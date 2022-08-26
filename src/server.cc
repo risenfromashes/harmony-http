@@ -366,7 +366,7 @@ void Server::iterate_directory(std::string path) {
     } else if (de->d_type & DT_REG | de->d_type & DT_LNK) {
       // add to all thread workers
       for (int i = 0; i < config_.num_threads; i++) {
-        workers_[i]->add_static_file(path + de->d_name);
+        workers_[i]->add_static_file(path + de->d_name, true);
       }
     }
   }

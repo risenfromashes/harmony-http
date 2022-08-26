@@ -78,7 +78,7 @@ public:
   }
 
   FileEntry *get_static_file(const std::string_view &rel_path,
-                             bool prefer_compressed = true);
+                             bool prefer_compressed, bool relative, bool watch);
 
   void parse_path();
 
@@ -97,7 +97,8 @@ public:
   int submit_json_response(std::string &&response);
   int submit_json_response(db::ResultString &&response);
 
-  int submit_file_response(std::string_view path);
+  int submit_file_response(std::string_view path, bool prefer_compressed = true,
+                           bool relative = true, bool watch = true);
   int submit_file_response();
 
   /* void prepare_status_response(...) */

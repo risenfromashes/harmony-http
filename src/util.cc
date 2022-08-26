@@ -448,9 +448,9 @@ bool check_http2_cipher_block_list(SSL *ssl) {
 
 #undef IS_CIPHER_BANNED_METHOD2
 
-std::unordered_map<std::string, std::string>
+std::pair<string_map<std::string>, string_map<std::string>>
 read_mime_types(const char *filename) {
-  std::unordered_map<std::string, std::string> rt;
+  string_map<std::string> rt1, rt2;
   std::ifstream in(filename);
   if (in) {
     std::string line;
@@ -473,14 +473,17 @@ read_mime_types(const char *filename) {
           break;
         }
         ext_end = std::find_if(ext_start, std::end(line), delim_pred);
-        rt.emplace(std::string(ext_start, ext_end),
-                   std::string(std::begin(line), type_end));
+        rt1.emplace(std::string(ext_start, ext_end),
+                    std::string(std::begin(line), type_end));
+        rt2.emplace(std::string(std::begin(line), type_end),
+                    std::string(ext_start, ext_end));
       }
     }
   }
   // instead of whatever microsoft /etc/mime_types has
-  rt["ico"] = "image/x-icon";
-  return rt;
+  rt1["ico"] = "image/x-icon";
+  rt2["image/x-icon"] = "ico";
+  return {rt1, rt2};
 }
 
 /* writes zero padded uint32_t to out */

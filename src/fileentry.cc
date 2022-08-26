@@ -15,9 +15,9 @@
 
 namespace hm {
 
-FileEntry::FileEntry(int fd, std::string p, Worker *worker)
+FileEntry::FileEntry(int fd, std::string p, Worker *worker, bool watch)
     : fd_(fd), path_(std::move(p)), worker_(worker), compressed_(false),
-      encoding_("\0") {
+      watch_(watch), encoding_("\0") {
 
   relpath_ = path_.substr(worker_->get_static_root().size() - 1);
   assert(fd >= 0);
@@ -36,26 +36,32 @@ FileEntry::FileEntry(int fd, std::string p, Worker *worker)
 
   info_ = {.mtime = st.st_mtime, .length = st.st_size};
 
-  stat_watcher_ = static_cast<ev_stat *>(malloc(sizeof(ev_stat)));
-  ev_stat_init(stat_watcher_, update_cb, path_.c_str(), 0.0);
-  stat_watcher_->data = this;
-  ev_stat_start(worker_->get_loop(), stat_watcher_);
+  if (watch_) {
+    stat_watcher_ = static_cast<ev_stat *>(malloc(sizeof(ev_stat)));
+    ev_stat_init(stat_watcher_, update_cb, path_.c_str(), 0.0);
+    stat_watcher_->data = this;
+    ev_stat_start(worker_->get_loop(), stat_watcher_);
+  }
 }
 
-std::unique_ptr<FileEntry> FileEntry::create(std::string path, Worker *worker) {
+std::unique_ptr<FileEntry> FileEntry::create(std::string path, Worker *worker,
+                                             bool watch) {
   int fd = open(path.c_str(), O_RDONLY);
   if (fd == -1) {
     std::cerr << "Failed to open file: " << path << std::endl;
     return nullptr;
   }
-  return std::unique_ptr<FileEntry>(new FileEntry(fd, std::move(path), worker));
+  return std::unique_ptr<FileEntry>(
+      new FileEntry(fd, std::move(path), worker, watch));
 }
 
 FileEntry::~FileEntry() {
   // std::cout << "File removed: " << path_ << std::endl;
-  ev_stat_stop(worker_->get_loop(), stat_watcher_);
-  free(stat_watcher_);
-  close(fd_);
+  if (watch_) {
+    ev_stat_stop(worker_->get_loop(), stat_watcher_);
+    free(stat_watcher_);
+    close(fd_);
+  }
 }
 
 void FileEntry::update_cb(struct ev_loop *loop, ev_stat *w, int revents) {
@@ -103,7 +109,7 @@ void FileEntry::set_ext(const std::string_view &path) {
 }
 
 void FileEntry::set_mime_type(const std::string_view &path) {
-  static auto dict = util::read_mime_types();
+  static auto dict = util::read_mime_types().first;
 
   auto itr = dict.find(ext_);
   if (itr != dict.end()) {

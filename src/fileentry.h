@@ -15,10 +15,11 @@ class FileEntry {
   friend class Server;
   struct FileInfo;
 
-  FileEntry(int fd, std::string path, Worker *worker);
+  FileEntry(int fd, std::string path, Worker *worker, bool watch);
 
 public:
-  static std::unique_ptr<FileEntry> create(std::string path, Worker *worker);
+  static std::unique_ptr<FileEntry> create(std::string path, Worker *worker,
+                                           bool watch);
   FileEntry(const FileEntry &) = delete;
   FileEntry &operator=(const FileEntry &) = delete;
 
@@ -57,6 +58,7 @@ private:
   std::string ext_;
   std::string mime_type_;
   bool compressed_;
+  bool watch_;
   const char *encoding_;
 
   std::atomic<bool> updated_;

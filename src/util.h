@@ -262,9 +262,6 @@ inline void hexdump(FILE *out, const uint8_t *src, size_t len) {
   }
 }
 
-std::unordered_map<std::string, std::string>
-read_mime_types(const char *filename = "/etc/mime.types");
-
 std::string http_date(time_t t);
 char *http_date(time_t t, char *res);
 
@@ -310,5 +307,8 @@ struct string_hash {
 template <class T>
 using string_map =
     std::unordered_map<std::string, T, string_hash, std::equal_to<>>;
+
+std::pair<string_map<std::string>, string_map<std::string>>
+read_mime_types(const char *filename = "/etc/mime.types");
 
 } // namespace hm::util

@@ -63,8 +63,10 @@ public:
   void remove_session(HttpSession *session);
 
   void remove_static_file(FileEntry *file);
+
   FileEntry *get_static_file(const std::string_view &rel_path,
-                             bool prefer_compressed = true);
+                             bool prefer_compressed, bool relative, bool watch);
+
   std::string_view get_static_root();
 
   std::string_view get_cached_date();
@@ -96,7 +98,7 @@ private:
   void add_stream(Stream *stream);
   void remove_stream(Stream *stream);
 
-  FileEntry *add_static_file(std::string path);
+  FileEntry *add_static_file(std::string path, bool watch);
 
   static void async_acceptcb(struct ev_loop *loop, ev_async *watcher,
                              int revents);
