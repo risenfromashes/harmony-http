@@ -67,7 +67,9 @@ void add_to_vector(std::vector<std::string> &ret, StringConvertible auto &&elem,
 
 template <class T> std::vector<T> make_vector(auto &&...elems) {
   std::vector<T> ret;
-  add_to_vector(ret, std::forward<decltype(elems)>(elems)...);
+  if constexpr (sizeof...(elems) > 0) {
+    add_to_vector(ret, std::forward<decltype(elems)>(elems)...);
+  }
   return ret;
 }
 
