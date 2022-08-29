@@ -47,8 +47,6 @@ AwaitableTask<std::string_view> HttpRequest::body() {
 }
 
 AwaitableTask<std::string_view> HttpRequest::data() {
-  std::cerr << "buffered: " << buffered_ << std::endl;
-  std::cerr << "ready: " << data_ready_ << std::endl;
   data_chunk_mode_ = true;
   data_coro_ = coro_handle::from_address((co_await this_coro()).address());
   // data may be buffered before coroutine/callback is registered
@@ -72,7 +70,6 @@ AwaitableTask<std::string_view> HttpRequest::data() {
 void HttpRequest::add_to_body(std::string_view str) { body_ += str; }
 
 void HttpRequest::handle_data(std::string_view str, bool eof) {
-  std::cerr << "handle_data " << str.length() << std::endl;
   // ignore empty string, empty string is used to signal eof
   if (!str.empty() || eof) {
     assert(!eof || str.empty());

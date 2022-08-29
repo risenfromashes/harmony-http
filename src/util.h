@@ -176,7 +176,12 @@ inline bool check_h2_is_selected(const std::string_view &proto) {
 
 template <size_t N>
 inline std::string_view to_string(int64_t n, MemBlock<N> &memblock) {
-  size_t size = std::log10((double)n) + 3;
+  size_t size = 2;
+  auto n_ = n;
+  while (n_) {
+    n_ /= 10;
+    size += 1;
+  }
   char *out = static_cast<char *>(memblock.alloc(size));
   std::snprintf(out, size, "%li", n);
   return out;

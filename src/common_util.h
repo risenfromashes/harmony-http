@@ -79,4 +79,6 @@ simdjson::ondemand::parser *get_json_parser();
 
 std::string_view get_extension(std::string_view mime_type);
 
+bool base64_decode_to_file(std::string_view data_, const std::string &outfile);
+
 } // namespace hm::util
